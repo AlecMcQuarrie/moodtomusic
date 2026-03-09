@@ -246,7 +246,7 @@ export default function Home() {
           <p className="text-xs text-neutral-700">
             Built with real music theory — scales, modes, and voice leading
           </p>
-          <p className="text-xs text-neutral-700 font-mono">v0.4.0</p>
+          <p className="text-xs text-neutral-700 font-mono">v0.5.0</p>
         </div>
       </footer>
     </div>

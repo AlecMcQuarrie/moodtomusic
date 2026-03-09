@@ -22,8 +22,8 @@ export interface Chord {
   romanNumeral: string;
   durationBeats: number;
   function: HarmonicFunction;
-  inversion: number;           // 0 = root, 1 = 1st, 2 = 2nd, 3 = 3rd
-  bassNote?: NoteName;         // for slash chords / pedal bass
+  inversion: number;
+  bassNote?: NoteName;
 }
 
 export interface ChordProgression {
@@ -83,6 +83,13 @@ const QUALITY_LABELS: Record<ChordQuality, string> = {
   add9: "add9", min9: "m9", maj9: "maj9", dom9: "9",
 };
 
+// Valid targets for secondary dominants (scale degrees 0-indexed).
+// Only major/minor chords on ii, IV, V, vi are standard tonicization targets.
+const VALID_SEC_DOM_TARGETS = new Set([1, 3, 4, 5]);
+
+// Sus chords only make musical sense on these scale degrees (I and IV).
+const VALID_SUS_DEGREES = new Set([0, 3]);
+
 // ── Scale degree definitions per mode ────────────────────────────────
 
 interface ScaleDegreeInfo {
@@ -92,75 +99,71 @@ interface ScaleDegreeInfo {
 }
 
 const MAJOR_DEGREES: ScaleDegreeInfo[] = [
-  { quality: "maj",    roman: "I",    function: "tonic" },
-  { quality: "min",    roman: "ii",   function: "predominant" },
-  { quality: "min",    roman: "iii",  function: "tonic" },
-  { quality: "maj",    roman: "IV",   function: "subdominant" },
-  { quality: "maj",    roman: "V",    function: "dominant" },
-  { quality: "min",    roman: "vi",   function: "tonic" },
-  { quality: "dim",    roman: "vii°", function: "dominant" },
+  { quality: "maj", roman: "I",    function: "tonic" },
+  { quality: "min", roman: "ii",   function: "predominant" },
+  { quality: "min", roman: "iii",  function: "tonic" },
+  { quality: "maj", roman: "IV",   function: "subdominant" },
+  { quality: "maj", roman: "V",    function: "dominant" },
+  { quality: "min", roman: "vi",   function: "tonic" },
+  { quality: "dim", roman: "vii°", function: "dominant" },
 ];
 
 const MINOR_DEGREES: ScaleDegreeInfo[] = [
-  { quality: "min",    roman: "i",    function: "tonic" },
-  { quality: "dim",    roman: "ii°",  function: "predominant" },
-  { quality: "maj",    roman: "III",  function: "tonic" },
-  { quality: "min",    roman: "iv",   function: "subdominant" },
-  { quality: "min",    roman: "v",    function: "dominant" },
-  { quality: "maj",    roman: "VI",   function: "subdominant" },
-  { quality: "maj",    roman: "VII",  function: "dominant" },
+  { quality: "min", roman: "i",    function: "tonic" },
+  { quality: "dim", roman: "ii°",  function: "predominant" },
+  { quality: "maj", roman: "III",  function: "tonic" },
+  { quality: "min", roman: "iv",   function: "subdominant" },
+  { quality: "min", roman: "v",    function: "dominant" },
+  { quality: "maj", roman: "VI",   function: "subdominant" },
+  { quality: "maj", roman: "VII",  function: "dominant" },
 ];
 
 const DORIAN_DEGREES: ScaleDegreeInfo[] = [
-  { quality: "min",    roman: "i",    function: "tonic" },
-  { quality: "min",    roman: "ii",   function: "predominant" },
-  { quality: "maj",    roman: "III",  function: "tonic" },
-  { quality: "maj",    roman: "IV",   function: "subdominant" },
-  { quality: "min",    roman: "v",    function: "dominant" },
-  { quality: "dim",    roman: "vi°",  function: "subdominant" },
-  { quality: "maj",    roman: "VII",  function: "dominant" },
+  { quality: "min", roman: "i",    function: "tonic" },
+  { quality: "min", roman: "ii",   function: "predominant" },
+  { quality: "maj", roman: "III",  function: "tonic" },
+  { quality: "maj", roman: "IV",   function: "subdominant" },
+  { quality: "min", roman: "v",    function: "dominant" },
+  { quality: "dim", roman: "vi°",  function: "subdominant" },
+  { quality: "maj", roman: "VII",  function: "dominant" },
 ];
 
 const MIXOLYDIAN_DEGREES: ScaleDegreeInfo[] = [
-  { quality: "maj",    roman: "I",    function: "tonic" },
-  { quality: "min",    roman: "ii",   function: "predominant" },
-  { quality: "dim",    roman: "iii°", function: "dominant" },
-  { quality: "maj",    roman: "IV",   function: "subdominant" },
-  { quality: "min",    roman: "v",    function: "dominant" },
-  { quality: "min",    roman: "vi",   function: "tonic" },
-  { quality: "maj",    roman: "♭VII", function: "subdominant" },
+  { quality: "maj", roman: "I",    function: "tonic" },
+  { quality: "min", roman: "ii",   function: "predominant" },
+  { quality: "dim", roman: "iii°", function: "dominant" },
+  { quality: "maj", roman: "IV",   function: "subdominant" },
+  { quality: "min", roman: "v",    function: "dominant" },
+  { quality: "min", roman: "vi",   function: "tonic" },
+  { quality: "maj", roman: "♭VII", function: "subdominant" },
 ];
 
 const PHRYGIAN_DEGREES: ScaleDegreeInfo[] = [
-  { quality: "min",    roman: "i",    function: "tonic" },
-  { quality: "maj",    roman: "♭II",  function: "subdominant" },
-  { quality: "maj",    roman: "III",  function: "tonic" },
-  { quality: "min",    roman: "iv",   function: "subdominant" },
-  { quality: "dim",    roman: "v°",   function: "dominant" },
-  { quality: "maj",    roman: "♭VI",  function: "subdominant" },
-  { quality: "min",    roman: "♭vii", function: "dominant" },
+  { quality: "min", roman: "i",    function: "tonic" },
+  { quality: "maj", roman: "♭II",  function: "subdominant" },
+  { quality: "maj", roman: "III",  function: "tonic" },
+  { quality: "min", roman: "iv",   function: "subdominant" },
+  { quality: "dim", roman: "v°",   function: "dominant" },
+  { quality: "maj", roman: "♭VI",  function: "subdominant" },
+  { quality: "min", roman: "♭vii", function: "dominant" },
 ];
 
 const LYDIAN_DEGREES: ScaleDegreeInfo[] = [
-  { quality: "maj",    roman: "I",    function: "tonic" },
-  { quality: "maj",    roman: "II",   function: "subdominant" },
-  { quality: "min",    roman: "iii",  function: "tonic" },
-  { quality: "aug",    roman: "IV+",  function: "subdominant" },
-  { quality: "maj",    roman: "V",    function: "dominant" },
-  { quality: "min",    roman: "vi",   function: "tonic" },
-  { quality: "dim",    roman: "vii°", function: "dominant" },
+  { quality: "maj", roman: "I",    function: "tonic" },
+  { quality: "maj", roman: "II",   function: "subdominant" },
+  { quality: "min", roman: "iii",  function: "tonic" },
+  { quality: "aug", roman: "IV+",  function: "subdominant" },
+  { quality: "maj", roman: "V",    function: "dominant" },
+  { quality: "min", roman: "vi",   function: "tonic" },
+  { quality: "dim", roman: "vii°", function: "dominant" },
 ];
 
 const MODE_DEGREES: Record<ModeName, ScaleDegreeInfo[]> = {
-  major: MAJOR_DEGREES,
-  minor: MINOR_DEGREES,
-  dorian: DORIAN_DEGREES,
-  mixolydian: MIXOLYDIAN_DEGREES,
-  phrygian: PHRYGIAN_DEGREES,
-  lydian: LYDIAN_DEGREES,
+  major: MAJOR_DEGREES, minor: MINOR_DEGREES, dorian: DORIAN_DEGREES,
+  mixolydian: MIXOLYDIAN_DEGREES, phrygian: PHRYGIAN_DEGREES, lydian: LYDIAN_DEGREES,
 };
 
-// ── Harmonic function transition rules ───────────────────────────────
+// ── Harmonic function transitions ────────────────────────────────────
 
 type TransitionMap = Record<HarmonicFunction, HarmonicFunction[]>;
 
@@ -179,236 +182,127 @@ interface MoodProfile {
   extensionChance: number;
   susChance: number;
   chromaticChance: number;
-  secondaryDominantChance: number;  // chance to insert V/x before a chord
-  tritoneSubChance: number;         // chance to replace V7 with ♭II7
-  inversionChance: number;          // chance to use an inversion
-  pedalBassChance: number;          // chance to sustain tonic in bass
+  secondaryDominantChance: number;
+  tritoneSubChance: number;
+  inversionChance: number;
+  pedalBassChance: number;
   phraseLengths: number[];
   phraseWeights: number[];
   looseTransitions: boolean;
   preferredCadence: "authentic" | "plagal" | "deceptive" | "half" | "mixed";
   rhythmStyle: "even" | "varied" | "halves";
-  // Starting chord options: weighted list of scale degrees (0-indexed)
   startDegrees: number[];
   startWeights: number[];
 }
 
 const MOOD_PROFILES: Record<string, MoodProfile> = {
   joyful: {
-    modes: ["major", "lydian", "mixolydian"],
-    modeWeights: [5, 2, 2],
-    extensionChance: 0.25,
-    susChance: 0.05,
-    chromaticChance: 0.1,
-    secondaryDominantChance: 0.15,
-    tritoneSubChance: 0.0,
-    inversionChance: 0.25,
-    pedalBassChance: 0.0,
-    phraseLengths: [16, 32],
-    phraseWeights: [3, 1],
-    looseTransitions: false,
-    preferredCadence: "authentic",
-    rhythmStyle: "even",
-    startDegrees: [0, 3, 4, 5],    // I, IV, V, vi
-    startWeights:  [4, 2, 2, 1],
+    modes: ["major", "lydian", "mixolydian"], modeWeights: [5, 2, 2],
+    extensionChance: 0.25, susChance: 0.05, chromaticChance: 0.1,
+    secondaryDominantChance: 0.15, tritoneSubChance: 0.0,
+    inversionChance: 0.25, pedalBassChance: 0.0,
+    phraseLengths: [16, 32], phraseWeights: [3, 1],
+    looseTransitions: false, preferredCadence: "authentic", rhythmStyle: "even",
+    startDegrees: [0, 3, 4, 5], startWeights: [4, 2, 2, 1],
   },
   peaceful: {
-    modes: ["major", "lydian"],
-    modeWeights: [3, 2],
-    extensionChance: 0.6,
-    susChance: 0.3,
-    chromaticChance: 0.05,
-    secondaryDominantChance: 0.05,
-    tritoneSubChance: 0.0,
-    inversionChance: 0.35,
-    pedalBassChance: 0.25,
-    phraseLengths: [16, 32],
-    phraseWeights: [2, 3],
-    looseTransitions: false,
-    preferredCadence: "plagal",
-    rhythmStyle: "varied",
-    startDegrees: [0, 3, 5, 2],
-    startWeights:  [3, 3, 2, 1],
+    modes: ["major", "lydian"], modeWeights: [3, 2],
+    extensionChance: 0.6, susChance: 0.3, chromaticChance: 0.05,
+    secondaryDominantChance: 0.05, tritoneSubChance: 0.0,
+    inversionChance: 0.35, pedalBassChance: 0.25,
+    phraseLengths: [16, 32], phraseWeights: [2, 3],
+    looseTransitions: false, preferredCadence: "plagal", rhythmStyle: "varied",
+    startDegrees: [0, 3, 5, 2], startWeights: [3, 3, 2, 1],
   },
   romantic: {
-    modes: ["major", "dorian", "mixolydian"],
-    modeWeights: [5, 2, 1],
-    extensionChance: 0.55,
-    susChance: 0.1,
-    chromaticChance: 0.15,
-    secondaryDominantChance: 0.25,
-    tritoneSubChance: 0.1,
-    inversionChance: 0.4,
-    pedalBassChance: 0.15,
-    phraseLengths: [16, 32],
-    phraseWeights: [2, 3],
-    looseTransitions: false,
-    preferredCadence: "mixed",
-    rhythmStyle: "varied",
-    startDegrees: [0, 5, 1, 3],    // I, vi, ii, IV
-    startWeights:  [3, 3, 2, 2],
+    modes: ["major", "dorian", "mixolydian"], modeWeights: [5, 2, 1],
+    extensionChance: 0.55, susChance: 0.1, chromaticChance: 0.15,
+    secondaryDominantChance: 0.2, tritoneSubChance: 0.1,
+    inversionChance: 0.4, pedalBassChance: 0.15,
+    phraseLengths: [16, 32], phraseWeights: [2, 3],
+    looseTransitions: false, preferredCadence: "mixed", rhythmStyle: "varied",
+    startDegrees: [0, 5, 1, 3], startWeights: [3, 3, 2, 2],
   },
   triumphant: {
-    modes: ["major", "mixolydian"],
-    modeWeights: [4, 2],
-    extensionChance: 0.1,
-    susChance: 0.05,
-    chromaticChance: 0.1,
-    secondaryDominantChance: 0.15,
-    tritoneSubChance: 0.0,
-    inversionChance: 0.2,
-    pedalBassChance: 0.0,
-    phraseLengths: [16, 32],
-    phraseWeights: [2, 3],
-    looseTransitions: false,
-    preferredCadence: "authentic",
-    rhythmStyle: "even",
-    startDegrees: [0, 3, 4],       // I, IV, V
-    startWeights:  [3, 3, 2],
+    modes: ["major", "mixolydian"], modeWeights: [4, 2],
+    extensionChance: 0.1, susChance: 0.05, chromaticChance: 0.1,
+    secondaryDominantChance: 0.15, tritoneSubChance: 0.0,
+    inversionChance: 0.2, pedalBassChance: 0.0,
+    phraseLengths: [16, 32], phraseWeights: [2, 3],
+    looseTransitions: false, preferredCadence: "authentic", rhythmStyle: "even",
+    startDegrees: [0, 3, 4], startWeights: [3, 3, 2],
   },
   nostalgic: {
-    modes: ["major", "minor", "dorian"],
-    modeWeights: [3, 3, 2],
-    extensionChance: 0.45,
-    susChance: 0.1,
-    chromaticChance: 0.2,
-    secondaryDominantChance: 0.2,
-    tritoneSubChance: 0.1,
-    inversionChance: 0.35,
-    pedalBassChance: 0.1,
-    phraseLengths: [16, 32],
-    phraseWeights: [2, 2],
-    looseTransitions: true,
-    preferredCadence: "deceptive",
-    rhythmStyle: "varied",
-    startDegrees: [0, 5, 3, 1, 2],
-    startWeights:  [2, 3, 2, 1, 1],
+    modes: ["major", "minor", "dorian"], modeWeights: [3, 3, 2],
+    extensionChance: 0.45, susChance: 0.1, chromaticChance: 0.15,
+    secondaryDominantChance: 0.15, tritoneSubChance: 0.1,
+    inversionChance: 0.35, pedalBassChance: 0.1,
+    phraseLengths: [16, 32], phraseWeights: [2, 2],
+    looseTransitions: false, preferredCadence: "deceptive", rhythmStyle: "varied",
+    startDegrees: [0, 5, 3, 1], startWeights: [2, 3, 2, 1],
   },
   dreamy: {
-    modes: ["lydian", "major"],
-    modeWeights: [3, 2],
-    extensionChance: 0.7,
-    susChance: 0.35,
-    chromaticChance: 0.1,
-    secondaryDominantChance: 0.1,
-    tritoneSubChance: 0.05,
-    inversionChance: 0.45,
-    pedalBassChance: 0.3,
-    phraseLengths: [16, 32],
-    phraseWeights: [1, 3],
-    looseTransitions: true,
-    preferredCadence: "plagal",
-    rhythmStyle: "varied",
-    startDegrees: [0, 3, 2, 5],
-    startWeights:  [2, 3, 2, 2],
+    modes: ["lydian", "major"], modeWeights: [3, 2],
+    extensionChance: 0.7, susChance: 0.35, chromaticChance: 0.1,
+    secondaryDominantChance: 0.1, tritoneSubChance: 0.05,
+    inversionChance: 0.45, pedalBassChance: 0.3,
+    phraseLengths: [16, 32], phraseWeights: [1, 3],
+    looseTransitions: false, preferredCadence: "plagal", rhythmStyle: "varied",
+    startDegrees: [0, 3, 2, 5], startWeights: [2, 3, 2, 2],
   },
   mysterious: {
-    modes: ["phrygian", "minor"],
-    modeWeights: [3, 2],
-    extensionChance: 0.4,
-    susChance: 0.1,
-    chromaticChance: 0.3,
-    secondaryDominantChance: 0.15,
-    tritoneSubChance: 0.2,
-    inversionChance: 0.3,
-    pedalBassChance: 0.2,
-    phraseLengths: [16, 32],
-    phraseWeights: [3, 2],
-    looseTransitions: true,
-    preferredCadence: "half",
-    rhythmStyle: "varied",
-    startDegrees: [0, 1, 5, 3],    // i, ♭II, ♭VI, iv
-    startWeights:  [2, 3, 2, 2],
+    modes: ["phrygian", "minor"], modeWeights: [3, 2],
+    extensionChance: 0.4, susChance: 0.1, chromaticChance: 0.2,
+    secondaryDominantChance: 0.1, tritoneSubChance: 0.15,
+    inversionChance: 0.3, pedalBassChance: 0.2,
+    phraseLengths: [16, 32], phraseWeights: [3, 2],
+    looseTransitions: false, preferredCadence: "half", rhythmStyle: "varied",
+    startDegrees: [0, 1, 5, 3], startWeights: [2, 3, 2, 2],
   },
   melancholic: {
-    modes: ["minor", "dorian", "major"],
-    modeWeights: [4, 2, 1],
-    extensionChance: 0.5,
-    susChance: 0.15,
-    chromaticChance: 0.15,
-    secondaryDominantChance: 0.15,
-    tritoneSubChance: 0.1,
-    inversionChance: 0.35,
-    pedalBassChance: 0.15,
-    phraseLengths: [16, 32],
-    phraseWeights: [2, 3],
-    looseTransitions: false,
-    preferredCadence: "plagal",
-    rhythmStyle: "varied",
-    startDegrees: [0, 5, 3, 6],    // i, VI, iv, VII
-    startWeights:  [2, 3, 2, 1],
+    modes: ["minor", "dorian", "major"], modeWeights: [4, 2, 1],
+    extensionChance: 0.5, susChance: 0.15, chromaticChance: 0.15,
+    secondaryDominantChance: 0.12, tritoneSubChance: 0.08,
+    inversionChance: 0.35, pedalBassChance: 0.15,
+    phraseLengths: [16, 32], phraseWeights: [2, 3],
+    looseTransitions: false, preferredCadence: "plagal", rhythmStyle: "varied",
+    startDegrees: [0, 5, 3, 6], startWeights: [2, 3, 2, 1],
   },
   anxious: {
-    modes: ["minor", "phrygian"],
-    modeWeights: [3, 2],
-    extensionChance: 0.35,
-    susChance: 0.05,
-    chromaticChance: 0.35,
-    secondaryDominantChance: 0.2,
-    tritoneSubChance: 0.25,
-    inversionChance: 0.3,
-    pedalBassChance: 0.1,
-    phraseLengths: [16],
-    phraseWeights: [1],
-    looseTransitions: true,
-    preferredCadence: "half",
-    rhythmStyle: "halves",
-    startDegrees: [0, 4, 1, 6],
-    startWeights:  [2, 2, 2, 1],
+    modes: ["minor", "phrygian"], modeWeights: [3, 2],
+    extensionChance: 0.35, susChance: 0.05, chromaticChance: 0.25,
+    secondaryDominantChance: 0.15, tritoneSubChance: 0.2,
+    inversionChance: 0.3, pedalBassChance: 0.1,
+    phraseLengths: [16], phraseWeights: [1],
+    looseTransitions: false, preferredCadence: "half", rhythmStyle: "halves",
+    startDegrees: [0, 4, 1, 6], startWeights: [2, 2, 2, 1],
   },
   angry: {
-    modes: ["minor", "phrygian"],
-    modeWeights: [3, 3],
-    extensionChance: 0.15,
-    susChance: 0.0,
-    chromaticChance: 0.25,
-    secondaryDominantChance: 0.1,
-    tritoneSubChance: 0.15,
-    inversionChance: 0.15,
-    pedalBassChance: 0.0,
-    phraseLengths: [16],
-    phraseWeights: [1],
-    looseTransitions: true,
-    preferredCadence: "half",
-    rhythmStyle: "even",
-    startDegrees: [0, 4, 1, 6],
-    startWeights:  [2, 2, 2, 2],
+    modes: ["minor", "phrygian"], modeWeights: [3, 3],
+    extensionChance: 0.15, susChance: 0.0, chromaticChance: 0.2,
+    secondaryDominantChance: 0.1, tritoneSubChance: 0.1,
+    inversionChance: 0.15, pedalBassChance: 0.0,
+    phraseLengths: [16], phraseWeights: [1],
+    looseTransitions: false, preferredCadence: "half", rhythmStyle: "even",
+    startDegrees: [0, 4, 1, 6], startWeights: [2, 2, 2, 2],
   },
   hopeful: {
-    modes: ["major", "mixolydian", "lydian"],
-    modeWeights: [4, 2, 1],
-    extensionChance: 0.35,
-    susChance: 0.15,
-    chromaticChance: 0.1,
-    secondaryDominantChance: 0.15,
-    tritoneSubChance: 0.0,
-    inversionChance: 0.3,
-    pedalBassChance: 0.1,
-    phraseLengths: [16, 32],
-    phraseWeights: [3, 2],
-    looseTransitions: false,
-    preferredCadence: "authentic",
-    rhythmStyle: "varied",
-    startDegrees: [0, 3, 5, 1],
-    startWeights:  [3, 3, 1, 1],
+    modes: ["major", "mixolydian", "lydian"], modeWeights: [4, 2, 1],
+    extensionChance: 0.35, susChance: 0.15, chromaticChance: 0.1,
+    secondaryDominantChance: 0.12, tritoneSubChance: 0.0,
+    inversionChance: 0.3, pedalBassChance: 0.1,
+    phraseLengths: [16, 32], phraseWeights: [3, 2],
+    looseTransitions: false, preferredCadence: "authentic", rhythmStyle: "varied",
+    startDegrees: [0, 3, 5, 1], startWeights: [3, 3, 1, 1],
   },
   contemplative: {
-    modes: ["dorian", "major", "minor"],
-    modeWeights: [3, 2, 2],
-    extensionChance: 0.6,
-    susChance: 0.2,
-    chromaticChance: 0.1,
-    secondaryDominantChance: 0.15,
-    tritoneSubChance: 0.1,
-    inversionChance: 0.4,
-    pedalBassChance: 0.2,
-    phraseLengths: [16, 32],
-    phraseWeights: [1, 3],
-    looseTransitions: true,
-    preferredCadence: "plagal",
-    rhythmStyle: "varied",
-    startDegrees: [0, 1, 3, 5],
-    startWeights:  [2, 2, 2, 2],
+    modes: ["dorian", "major", "minor"], modeWeights: [3, 2, 2],
+    extensionChance: 0.6, susChance: 0.2, chromaticChance: 0.1,
+    secondaryDominantChance: 0.1, tritoneSubChance: 0.08,
+    inversionChance: 0.4, pedalBassChance: 0.2,
+    phraseLengths: [16, 32], phraseWeights: [1, 3],
+    looseTransitions: false, preferredCadence: "plagal", rhythmStyle: "varied",
+    startDegrees: [0, 1, 3, 5], startWeights: [2, 2, 2, 2],
   },
 };
 
@@ -459,9 +353,6 @@ function pickRandom<T>(arr: T[]): T {
 }
 
 // ── Chord voicing & inversions ───────────────────────────────────────
-// Applies inversions by rotating notes up an octave from the bottom.
-// For 7th chords: up to 3rd inversion. For triads: up to 2nd.
-// Optionally overrides the bass note for slash chords / pedal bass.
 
 function voiceChord(
   rootMidi: number,
@@ -469,22 +360,18 @@ function voiceChord(
   inversion: number,
   bassOverrideMidi?: number,
 ): number[] {
-  // Build root-position notes
   let notes = intervals.map((i) => rootMidi + i);
 
-  // Apply inversion: move bottom N notes up 12 semitones
   const maxInversion = Math.min(inversion, notes.length - 1);
   for (let inv = 0; inv < maxInversion; inv++) {
     notes[inv] += 12;
   }
   notes.sort((a, b) => a - b);
 
-  // If bass override, place it below the voicing
   if (bassOverrideMidi !== undefined) {
-    // Put bass note in octave 3 (below the chord voicing)
     let bass = bassOverrideMidi;
     while (bass >= notes[0]) bass -= 12;
-    if (bass < 36) bass += 12; // don't go too low
+    if (bass < 36) bass += 12;
     notes = [bass, ...notes];
   }
 
@@ -508,27 +395,20 @@ function buildChord(
   const bassOverrideMidi = bassNote ? noteToMidi(bassNote, 3) : undefined;
   const midiNotes = voiceChord(rootMidi, intervals, inversion, bassOverrideMidi);
 
-  const qualityLabel = QUALITY_LABELS[quality];
-  let label = `${root}${qualityLabel}`;
+  let label = `${root}${QUALITY_LABELS[quality]}`;
 
-  // Slash chord notation
   if (bassNote && bassNote !== root) {
     label += `/${bassNote}`;
   } else if (inversion > 0) {
-    // Inversion implies a different bass note
     const invBassInterval = intervals[inversion] ?? intervals[0];
     const invBass = transposeNote(root, invBassInterval);
     if (invBass !== root) label += `/${invBass}`;
   }
 
-  // Duration hint
   if (durationBeats === 2) label += " (½)";
 
   return {
-    root,
-    quality,
-    midiNotes,
-    label,
+    root, quality, midiNotes, label,
     romanNumeral: roman,
     durationBeats,
     function: harmonicFn,
@@ -538,30 +418,26 @@ function buildChord(
 }
 
 function buildChordFromDegree(
-  key: NoteName,
-  mode: ModeName,
-  degree: number,
-  quality: ChordQuality,
-  roman: string,
-  harmonicFn: HarmonicFunction,
-  durationBeats: number,
-  inversion: number = 0,
-  bassNote?: NoteName,
+  key: NoteName, mode: ModeName, degree: number,
+  quality: ChordQuality, roman: string, harmonicFn: HarmonicFunction,
+  durationBeats: number, inversion: number = 0, bassNote?: NoteName,
 ): Chord {
-  const scaleIntervals = SCALE_INTERVALS[mode];
-  const root = transposeNote(key, scaleIntervals[degree]);
+  const root = transposeNote(key, SCALE_INTERVALS[mode][degree]);
   return buildChord(root, quality, roman, harmonicFn, durationBeats, inversion, bassNote);
 }
 
 // ── Extension / quality upgrading ────────────────────────────────────
+// Sus chords are now gated by degree (only I and IV).
 
 function maybeExtend(
   baseQuality: ChordQuality,
   extensionChance: number,
   susChance: number,
   harmonicFn: HarmonicFunction,
+  degree: number,
 ): { quality: ChordQuality; romanSuffix: string } {
-  if (harmonicFn === "tonic" && Math.random() < susChance) {
+  // Sus chords only on I (degree 0) and IV (degree 3)
+  if (VALID_SUS_DEGREES.has(degree) && harmonicFn !== "dominant" && Math.random() < susChance) {
     const sus = Math.random() < 0.5 ? "sus2" : "sus4";
     return { quality: sus, romanSuffix: sus };
   }
@@ -587,37 +463,33 @@ function maybeExtend(
   return { quality: baseQuality, romanSuffix: "" };
 }
 
-// ── Inversion selection ──────────────────────────────────────────────
-// Chooses an inversion that produces smooth voice leading relative to
-// the previous chord's bass note.
+// ── Inversion selection (voice-leading aware) ────────────────────────
 
 function chooseInversion(
   quality: ChordQuality,
-  profile: MoodProfile,
+  inversionChance: number,
   prevBassNote?: NoteName,
   chordRoot?: NoteName,
 ): number {
-  if (Math.random() > profile.inversionChance) return 0;
+  if (Math.random() > inversionChance) return 0;
 
   const intervals = CHORD_INTERVALS[quality];
-  const maxInv = Math.min(intervals.length - 1, 3);
+  // Triads: up to 2nd inversion. 7ths: up to 3rd. But limit to 2 max
+  // to keep voicings grounded.
+  const maxInv = Math.min(intervals.length - 1, 2);
 
   if (!prevBassNote || !chordRoot) {
-    // No previous chord — pick randomly
-    return Math.floor(Math.random() * (maxInv + 1));
+    // First chord — prefer root or 1st inversion, not 2nd
+    return Math.random() < 0.7 ? 0 : 1;
   }
 
-  // Pick the inversion whose bass note is closest to the previous bass
   let bestInv = 0;
   let bestDistance = 99;
 
   for (let inv = 0; inv <= maxInv; inv++) {
     const bassInterval = intervals[inv] ?? 0;
     const bass = transposeNote(chordRoot, bassInterval);
-    const dist = Math.min(
-      semitoneDiff(prevBassNote, bass),
-      semitoneDiff(bass, prevBassNote)
-    );
+    const dist = Math.min(semitoneDiff(prevBassNote, bass), semitoneDiff(bass, prevBassNote));
     if (dist < bestDistance) {
       bestDistance = dist;
       bestInv = inv;
@@ -628,95 +500,86 @@ function chooseInversion(
 }
 
 // ── Secondary dominants ──────────────────────────────────────────────
-// V7/x: a dominant 7th chord whose root is a 5th above the target.
-// Used to tonicize any diatonic chord, creating chromatic tension.
-
-interface SecondaryDominant {
-  rootSemitones: number;  // semitones above key root
-  quality: ChordQuality;
-  roman: string;
-  targetDegree: number;
-}
 
 function getSecondaryDominant(
   key: NoteName,
   mode: ModeName,
   targetDegree: number,
-): SecondaryDominant | null {
-  const scaleIntervals = SCALE_INTERVALS[mode];
-  const targetSemitones = scaleIntervals[targetDegree];
-  // V/x root is 7 semitones above target (a perfect 5th)
-  const rootSemitones = (targetSemitones + 7) % 12;
+): { rootSemitones: number; quality: ChordQuality; roman: string } | null {
+  // Only tonicize standard targets: ii, IV, V, vi
+  if (!VALID_SEC_DOM_TARGETS.has(targetDegree)) return null;
 
-  // Don't create secondary dominant of the tonic (that's just V)
-  if (targetDegree === 0) return null;
-  // Don't tonicize diminished chords
   const degrees = MODE_DEGREES[mode];
+  // Don't tonicize diminished chords
   if (degrees[targetDegree].quality === "dim") return null;
 
+  const scaleIntervals = SCALE_INTERVALS[mode];
+  const targetSemitones = scaleIntervals[targetDegree];
+  const rootSemitones = (targetSemitones + 7) % 12;
   const targetRoman = degrees[targetDegree].roman;
 
-  return {
-    rootSemitones,
-    quality: "dom7",
-    roman: `V7/${targetRoman}`,
-    targetDegree,
-  };
+  return { rootSemitones, quality: "dom7", roman: `V7/${targetRoman}` };
 }
 
 // ── Tritone substitution ─────────────────────────────────────────────
-// Replaces V7 (or any dom7) with a dom7 a tritone away (♭II7).
-// The shared tritone interval (3rd and 7th swap roles) creates the
-// same harmonic pull with a chromatic bass descent.
 
-function tritoneSub(
-  chordRoot: NoteName,
-): { root: NoteName; roman: string } {
-  const subRoot = transposeNote(chordRoot, 6); // tritone = 6 semitones
-  return { root: subRoot, roman: `♭II7` };
+function tritoneSub(chordRoot: NoteName): { root: NoteName; roman: string } {
+  return { root: transposeNote(chordRoot, 6), roman: "♭II7" };
 }
 
 // ── Pedal bass ───────────────────────────────────────────────────────
-// Sustains the tonic note in the bass under changing upper harmonies.
 
 function getPedalBass(key: NoteName, mode: ModeName): NoteName {
   return transposeNote(key, SCALE_INTERVALS[mode][0]);
 }
 
-// ── Rhythm generation ────────────────────────────────────────────────
+// ── Rhythm generation (with chord count caps) ────────────────────────
+// 4 bars: 4-6 chords max.  8 bars: 4-8 chords max.
 
 function generateRhythm(
   totalBeats: number,
-  style: "even" | "varied" | "halves"
+  style: "even" | "varied" | "halves",
 ): number[] {
+  const maxChords = totalBeats === 16 ? 6 : 8;
+  const minChords = 4;
+
   if (style === "even") {
-    return Array(totalBeats / 4).fill(4);
+    // All whole notes: 4 chords for 4 bars, 8 for 8 bars
+    const count = totalBeats / 4;
+    return Array(count).fill(4);
   }
+
   if (style === "halves") {
-    return Array(totalBeats / 2).fill(2);
+    // Cap at maxChords even in halves mode
+    const naturalCount = totalBeats / 2;
+    if (naturalCount <= maxChords) {
+      return Array(naturalCount).fill(2);
+    }
+    // Mix of wholes and halves to stay under cap
+    return generateMixedRhythm(totalBeats, maxChords);
   }
 
-  const durations: number[] = [];
-  let remaining = totalBeats;
+  // "varied" — mix of whole and half notes, respecting chord count limits
+  return generateMixedRhythm(totalBeats, maxChords);
+}
 
-  while (remaining > 0) {
-    if (remaining === 2) {
-      durations.push(2);
-      remaining -= 2;
-    } else if (remaining === 4) {
-      durations.push(Math.random() < 0.6 ? 4 : 2);
-      if (durations[durations.length - 1] === 2) {
-        durations.push(2);
-      }
-      remaining = 0;
+function generateMixedRhythm(totalBeats: number, maxChords: number): number[] {
+  // Generate bar by bar: each bar is either 1 whole (4 beats) or 2 halves (4 beats)
+  const bars = totalBeats / 4;
+  const durations: number[] = [];
+
+  // Decide how many bars get split into halves
+  // Each split bar adds 1 extra chord. Start with `bars` chords (all whole).
+  // Max splits = maxChords - bars
+  const maxSplits = Math.max(0, maxChords - bars);
+  let splits = 0;
+
+  for (let bar = 0; bar < bars; bar++) {
+    if (splits < maxSplits && Math.random() < 0.4) {
+      durations.push(2, 2);
+      splits++;
     } else {
-      if (Math.random() < 0.5) {
-        durations.push(4);
-        remaining -= 4;
-      } else {
-        durations.push(2, 2);
-        remaining -= 4;
-      }
+      durations.push(4);
     }
   }
 
@@ -733,7 +596,7 @@ interface CadenceChord {
 
 function getCadence(
   mode: ModeName,
-  type: "authentic" | "plagal" | "deceptive" | "half" | "mixed"
+  type: "authentic" | "plagal" | "deceptive" | "half" | "mixed",
 ): CadenceChord[] {
   const actualType = type === "mixed"
     ? pickRandom(["authentic", "plagal", "deceptive", "half"] as const)
@@ -743,32 +606,20 @@ function getCadence(
 
   switch (actualType) {
     case "authentic":
-      if (isMinorLike) {
-        return [
-          { degree: 4, forceQuality: "maj", forcedRoman: "V" },
-          { degree: 0 },
-        ];
-      }
-      return [{ degree: 4 }, { degree: 0 }];
-
+      return isMinorLike
+        ? [{ degree: 4, forceQuality: "maj", forcedRoman: "V" }, { degree: 0 }]
+        : [{ degree: 4 }, { degree: 0 }];
     case "plagal":
       return [{ degree: 3 }, { degree: 0 }];
-
     case "deceptive":
-      if (isMinorLike) {
-        return [
-          { degree: 4, forceQuality: "maj", forcedRoman: "V" },
-          { degree: 5 },
-        ];
-      }
-      return [{ degree: 4 }, { degree: 5 }];
-
+      return isMinorLike
+        ? [{ degree: 4, forceQuality: "maj", forcedRoman: "V" }, { degree: 5 }]
+        : [{ degree: 4 }, { degree: 5 }];
     case "half":
       return [
         { degree: isMinorLike ? 3 : 1 },
         { degree: 4, forceQuality: isMinorLike ? "maj" : undefined, forcedRoman: isMinorLike ? "V" : undefined },
       ];
-
     default:
       return [{ degree: 4 }, { degree: 0 }];
   }
@@ -780,117 +631,180 @@ function getNextDegree(
   currentDegree: number,
   currentFunction: HarmonicFunction,
   degrees: ScaleDegreeInfo[],
-  profile: MoodProfile,
 ): number {
-  let allowedFunctions = STANDARD_TRANSITIONS[currentFunction];
-
-  if (profile.looseTransitions && Math.random() < 0.3) {
-    allowedFunctions = ["tonic", "subdominant", "predominant", "dominant"];
-  }
+  const allowedFunctions = STANDARD_TRANSITIONS[currentFunction];
 
   const candidates: { degree: number; weight: number }[] = [];
 
   for (let d = 0; d < 7; d++) {
-    if (d === currentDegree && currentFunction !== "tonic") continue;
+    if (d === currentDegree) continue; // never repeat the same degree
     const info = degrees[d];
-    if (allowedFunctions.includes(info.function)) {
-      const distance = Math.min(
-        Math.abs(d - currentDegree),
-        7 - Math.abs(d - currentDegree)
-      );
-      let weight = distance === 1 ? 4 :
-                   distance === 3 ? 3 :
-                   distance === 4 ? 3 :
-                   distance === 2 ? 2 : 1;
-      if (d === 0) weight += 1;
-      candidates.push({ degree: d, weight });
-    }
+    if (!allowedFunctions.includes(info.function)) continue;
+
+    const distance = Math.min(Math.abs(d - currentDegree), 7 - Math.abs(d - currentDegree));
+    let weight = distance === 1 ? 4 : distance === 3 ? 3 : distance === 4 ? 3 : distance === 2 ? 2 : 1;
+    if (d === 0) weight += 1; // slight home bias
+    candidates.push({ degree: d, weight });
   }
 
   if (candidates.length === 0) return 0;
 
   return weightedRandom(
     candidates.map((c) => c.degree),
-    candidates.map((c) => c.weight)
+    candidates.map((c) => c.weight),
   );
 }
 
-// ── Modal interchange (borrowed chords) ──────────────────────────────
+// ── Modal interchange ────────────────────────────────────────────────
 
 function maybeBorrowChord(
   mode: ModeName,
   degree: number,
-  profile: MoodProfile,
-): { borrowedMode: ModeName; degree: number } | null {
-  if (Math.random() > profile.chromaticChance) return null;
+  chromaticChance: number,
+): { borrowedMode: ModeName } | null {
+  if (Math.random() > chromaticChance) return null;
 
   const borrowModes: ModeName[] = mode === "major"
     ? ["minor", "dorian", "mixolydian"]
     : ["major", "dorian", "lydian"];
 
-  const borrowMode = pickRandom(borrowModes);
-  return { borrowedMode: borrowMode, degree };
+  return { borrowedMode: pickRandom(borrowModes) };
+}
+
+// ── Progression scoring / validation ─────────────────────────────────
+// Scores a candidate progression. Returns a number 0-100.
+// Progressions scoring below the threshold get re-rolled.
+
+interface ChordSpec {
+  degree: number;
+  quality: ChordQuality;
+  roman: string;
+  fn: HarmonicFunction;
+  duration: number;
+  isDiatonic: boolean;
+  isSecondaryDom: boolean;
+  rootOverride?: NoteName;
+}
+
+function scoreProgression(specs: ChordSpec[]): number {
+  let score = 100;
+
+  // 1. Penalize back-to-back same degree (unless tonic)
+  for (let i = 1; i < specs.length; i++) {
+    if (specs[i].degree === specs[i - 1].degree && !specs[i].isSecondaryDom && !specs[i - 1].isSecondaryDom) {
+      if (specs[i].degree !== 0) {
+        score -= 20; // same non-tonic chord repeated = bad
+      }
+    }
+  }
+
+  // 2. Penalize 3+ consecutive non-diatonic chords
+  let nonDiatonicRun = 0;
+  for (const spec of specs) {
+    if (!spec.isDiatonic) {
+      nonDiatonicRun++;
+      if (nonDiatonicRun >= 3) score -= 25;
+    } else {
+      nonDiatonicRun = 0;
+    }
+  }
+
+  // 3. Penalize if tonic (degree 0) never appears
+  const hasTonic = specs.some((s) => s.degree === 0 && !s.isSecondaryDom);
+  if (!hasTonic) score -= 15;
+
+  // 4. Penalize if too many secondary dominants (> 2 in the progression)
+  const secDomCount = specs.filter((s) => s.isSecondaryDom).length;
+  if (secDomCount > 2) score -= 15 * (secDomCount - 2);
+
+  // 5. Penalize progressions that stay on one function too long (3+ same fn)
+  for (let i = 2; i < specs.length; i++) {
+    if (specs[i].fn === specs[i - 1].fn && specs[i].fn === specs[i - 2].fn) {
+      score -= 10;
+    }
+  }
+
+  // 6. Reward variety of degrees used
+  const uniqueDegrees = new Set(specs.filter((s) => !s.isSecondaryDom).map((s) => s.degree));
+  if (uniqueDegrees.size >= 4) score += 5;
+  if (uniqueDegrees.size <= 2) score -= 15;
+
+  return Math.max(0, Math.min(100, score));
 }
 
 // ── Main generation function ─────────────────────────────────────────
 
+const MIN_SCORE = 60;
+const MAX_ATTEMPTS = 20;
+
 export function generateProgression(
   moodId: string,
-  key: NoteName
+  key: NoteName,
 ): ChordProgression {
   const profile = MOOD_PROFILES[moodId];
   if (!profile) throw new Error(`Unknown mood: ${moodId}`);
 
   const mood = MOODS.find((m) => m.id === moodId);
 
+  // Try up to MAX_ATTEMPTS times, keep the best
+  let bestResult: ChordProgression | null = null;
+  let bestScore = -1;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const result = generateCandidate(key, profile, mood?.name ?? moodId);
+    const score = scoreProgression(result.specs);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestResult = result.progression;
+    }
+
+    if (score >= MIN_SCORE) break; // good enough
+  }
+
+  return bestResult!;
+}
+
+function generateCandidate(
+  key: NoteName,
+  profile: MoodProfile,
+  moodName: string,
+): { progression: ChordProgression; specs: ChordSpec[] } {
   // 1. Pick mode
   const mode = weightedRandom(profile.modes, profile.modeWeights);
   const degrees = MODE_DEGREES[mode];
 
-  // 2. Pick phrase length
+  // 2. Phrase length
   const totalBeats = weightedRandom(profile.phraseLengths, profile.phraseWeights);
 
-  // 3. Generate rhythm
+  // 3. Rhythm (with chord count caps)
   const durations = generateRhythm(totalBeats, profile.rhythmStyle);
   const chordCount = durations.length;
 
   // 4. Cadence
   const cadence = getCadence(mode, profile.preferredCadence);
 
-  // 5. Pedal bass decision (sustained tonic in bass for portions)
+  // 5. Pedal bass
   const usePedalBass = Math.random() < profile.pedalBassChance;
   const pedalNote = usePedalBass ? getPedalBass(key, mode) : undefined;
-  // Pedal bass typically applies to first half of progression
   const pedalEndIndex = usePedalBass ? Math.ceil(chordCount / 2) : 0;
 
-  // 6. Pick starting degree (weighted by mood profile)
+  // 6. Starting degree
   const startDegree = weightedRandom(profile.startDegrees, profile.startWeights);
 
-  // 7. Generate chord sequence
-  interface ChordSpec {
-    degree: number;
-    quality: ChordQuality;
-    roman: string;
-    fn: HarmonicFunction;
-    duration: number;
-    inversion: number;
-    bassNote?: NoteName;
-    isSecondaryDom: boolean;
-    rootOverride?: NoteName;
-  }
-
+  // 7. Build chord specs
   const specs: ChordSpec[] = [];
   let currentDegree = startDegree;
-  let prevBassNote: NoteName | undefined;
 
   for (let i = 0; i < chordCount; i++) {
     const isCadenceStart = i === chordCount - 2;
     const isCadenceEnd = i === chordCount - 1;
 
-    let degree: number = 0;
+    let degree = 0;
     let degreeInfo: ScaleDegreeInfo = degrees[0];
     let isSecondaryDom = false;
     let rootOverride: NoteName | undefined;
+    let isDiatonic = true;
 
     if (isCadenceEnd && cadence.length >= 2) {
       degree = cadence[1].degree;
@@ -906,39 +820,33 @@ export function generateProgression(
       degree = startDegree;
       degreeInfo = degrees[degree];
     } else {
-      // Get the natural next degree
-      degree = getNextDegree(currentDegree, degrees[currentDegree].function, degrees, profile);
+      degree = getNextDegree(currentDegree, degrees[currentDegree].function, degrees);
 
-      // ── Secondary dominant insertion ──
-      // If the next chord is a good target, maybe insert V7/x
-      if (Math.random() < profile.secondaryDominantChance) {
+      // Secondary dominant (only on valid targets, max 1 per progression attempt here)
+      const existingSecDoms = specs.filter((s) => s.isSecondaryDom).length;
+      if (existingSecDoms < 2 && Math.random() < profile.secondaryDominantChance) {
         const secDom = getSecondaryDominant(key, mode, degree);
         if (secDom) {
           isSecondaryDom = true;
+          isDiatonic = false;
           rootOverride = transposeNote(key, secDom.rootSemitones);
-          degreeInfo = {
-            quality: secDom.quality,
-            roman: secDom.roman,
-            function: "dominant",
-          };
-          // Don't update currentDegree — the next iteration will still
-          // target this degree naturally
+          degreeInfo = { quality: secDom.quality, roman: secDom.roman, function: "dominant" };
         }
       }
 
       if (!isSecondaryDom) {
-        // Maybe borrow from parallel mode
-        const borrowed = maybeBorrowChord(mode, degree, profile);
+        // Modal interchange
+        const borrowed = maybeBorrowChord(mode, degree, profile.chromaticChance);
         if (borrowed) {
-          degreeInfo = MODE_DEGREES[borrowed.borrowedMode][borrowed.degree];
+          degreeInfo = MODE_DEGREES[borrowed.borrowedMode][degree];
+          isDiatonic = false;
         } else {
           degreeInfo = degrees[degree];
         }
       }
     }
 
-    // ── Tritone substitution ──
-    // Replace dominant 7th chords with ♭II7
+    // Tritone substitution (only on diatonic dom7 chords)
     if (
       !isSecondaryDom &&
       degreeInfo.quality === "dom7" &&
@@ -949,9 +857,10 @@ export function generateProgression(
       const sub = tritoneSub(chordRoot);
       rootOverride = sub.root;
       degreeInfo = { ...degreeInfo, roman: sub.roman };
+      isDiatonic = false;
     }
 
-    // ── Quality extension ──
+    // Quality extension (sus gated by degree)
     let finalQuality = degreeInfo.quality;
     let roman = degreeInfo.roman;
 
@@ -961,79 +870,67 @@ export function generateProgression(
         profile.extensionChance,
         profile.susChance,
         degreeInfo.function,
+        degree,
       );
       finalQuality = extQ;
       if (romanSuffix) {
         roman = degreeInfo.roman.replace(/[°+]$/, "") + romanSuffix;
       }
-    } else {
-      finalQuality = degreeInfo.quality;
-    }
-
-    // ── Inversion for voice leading ──
-    const chordRoot = rootOverride ?? transposeNote(key, SCALE_INTERVALS[mode][degree]);
-    const inversion = chooseInversion(finalQuality, profile, prevBassNote, chordRoot);
-
-    // ── Pedal bass ──
-    let bassNote: NoteName | undefined;
-    if (usePedalBass && i < pedalEndIndex && pedalNote) {
-      bassNote = pedalNote;
     }
 
     specs.push({
-      degree,
-      quality: finalQuality,
-      roman,
+      degree, quality: finalQuality, roman,
       fn: degreeInfo.function,
       duration: durations[i],
-      inversion,
-      bassNote,
+      isDiatonic,
       isSecondaryDom,
       rootOverride,
     });
-
-    // Track bass note for voice-leading-aware inversions
-    const intervals = CHORD_INTERVALS[finalQuality];
-    const invBassInterval = intervals[Math.min(inversion, intervals.length - 1)] ?? 0;
-    prevBassNote = bassNote ?? transposeNote(chordRoot, invBassInterval);
 
     if (!isSecondaryDom) {
       currentDegree = degree;
     }
   }
 
-  // 8. Build Chord objects
-  const chords = specs.map((spec) => {
-    if (spec.rootOverride) {
-      return buildChord(
-        spec.rootOverride,
-        spec.quality,
-        spec.roman,
-        spec.fn,
-        spec.duration,
-        spec.inversion,
-        spec.bassNote,
-      );
+  // 8. Build Chord objects with inversions
+  let prevBassNote: NoteName | undefined;
+
+  const chords = specs.map((spec, i) => {
+    const chordRoot = spec.rootOverride ?? transposeNote(key, SCALE_INTERVALS[mode][spec.degree]);
+    const inversion = chooseInversion(spec.quality, profile.inversionChance, prevBassNote, chordRoot);
+
+    let bassNote: NoteName | undefined;
+    if (usePedalBass && i < pedalEndIndex && pedalNote) {
+      bassNote = pedalNote;
     }
-    return buildChordFromDegree(
-      key,
-      mode,
-      spec.degree,
-      spec.quality,
-      spec.roman,
-      spec.fn,
-      spec.duration,
-      spec.inversion,
-      spec.bassNote,
-    );
+
+    const chord = spec.rootOverride
+      ? buildChord(spec.rootOverride, spec.quality, spec.roman, spec.fn, spec.duration, inversion, bassNote)
+      : buildChordFromDegree(key, mode, spec.degree, spec.quality, spec.roman, spec.fn, spec.duration, inversion, bassNote);
+
+    // Track bass for next chord's voice leading
+    const intervals = CHORD_INTERVALS[spec.quality];
+    const invBassInterval = intervals[Math.min(inversion, intervals.length - 1)] ?? 0;
+    prevBassNote = bassNote ?? transposeNote(chordRoot, invBassInterval);
+
+    return chord;
   });
 
+  // Voice leading range check: ensure no chord spans > 24 semitones (2 octaves)
+  for (const chord of chords) {
+    const range = chord.midiNotes[chord.midiNotes.length - 1] - chord.midiNotes[0];
+    if (range > 24) {
+      // Compact: move lowest note up or highest note down
+      while (chord.midiNotes[chord.midiNotes.length - 1] - chord.midiNotes[0] > 24) {
+        chord.midiNotes[chord.midiNotes.length - 1] -= 12;
+      }
+      chord.midiNotes.sort((a, b) => a - b);
+    }
+  }
+
   return {
-    chords,
-    key,
-    mode,
-    mood: mood?.name ?? moodId,
-    totalBeats,
+    progression: { chords, key, mode, mood: moodName, totalBeats },
+    specs,
   };
 }
 
@@ -1049,7 +946,7 @@ export function midiToNoteName(midi: number): string {
 
 export function transposeProgression(
   progression: ChordProgression,
-  newKey: NoteName
+  newKey: NoteName,
 ): ChordProgression {
   const oldKeyIndex = ALL_NOTES.indexOf(progression.key);
   const newKeyIndex = ALL_NOTES.indexOf(newKey);
@@ -1062,9 +959,7 @@ export function transposeProgression(
     const newMidiNotes = chord.midiNotes.map((n) => n + semitoneShift);
     const newBassNote = chord.bassNote ? transposeNote(chord.bassNote, semitoneShift) : undefined;
 
-    // Rebuild label from scratch for accuracy
-    const qualityLabel = QUALITY_LABELS[chord.quality];
-    let newLabel = `${newRoot}${qualityLabel}`;
+    let newLabel = `${newRoot}${QUALITY_LABELS[chord.quality]}`;
     if (newBassNote && newBassNote !== newRoot) {
       newLabel += `/${newBassNote}`;
     } else if (chord.inversion > 0) {
@@ -1075,20 +970,10 @@ export function transposeProgression(
     }
     if (chord.durationBeats === 2) newLabel += " (½)";
 
-    return {
-      ...chord,
-      root: newRoot,
-      midiNotes: newMidiNotes,
-      label: newLabel,
-      bassNote: newBassNote,
-    };
+    return { ...chord, root: newRoot, midiNotes: newMidiNotes, label: newLabel, bassNote: newBassNote };
   });
 
-  return {
-    ...progression,
-    key: newKey,
-    chords: transposedChords,
-  };
+  return { ...progression, key: newKey, chords: transposedChords };
 }
 
 export const KEY_OPTIONS: NoteName[] = ALL_NOTES;
