@@ -302,35 +302,29 @@ const MOOD_PROGRESSIONS: Record<string, ProgressionTemplate[]> = {
 
   triumphant: [
     {
-      name: "Power Anthem (I–V–vi–IV–I–V)",
+      name: "Power Anthem (I–V–vi–IV)",
       mode: "major",
       steps: [
         { degree: 0, quality: "maj", roman: "I" },
         { degree: 4, quality: "maj", roman: "V" },
         { degree: 5, quality: "min", roman: "vi" },
         { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 4, quality: "maj", roman: "V" },
       ],
     },
     {
-      name: "Heroic Climb (IV–V–vi–IV–V–I)",
+      name: "Heroic Climb (IV–V–vi–I)",
       mode: "major",
       steps: [
         { degree: 3, quality: "maj", roman: "IV" },
         { degree: 4, quality: "maj", roman: "V" },
         { degree: 5, quality: "min", roman: "vi" },
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 4, quality: "maj", roman: "V" },
         { degree: 0, quality: "maj", roman: "I" },
       ],
     },
     {
-      name: "Plagal Victory (I–IV–I–IV–V–I)",
+      name: "Plagal Victory (I–IV–V–I)",
       mode: "major",
       steps: [
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 3, quality: "maj", roman: "IV" },
         { degree: 0, quality: "maj", roman: "I" },
         { degree: 3, quality: "maj", roman: "IV" },
         { degree: 4, quality: "maj", roman: "V" },
@@ -566,11 +560,9 @@ const MOOD_PROGRESSIONS: Record<string, ProgressionTemplate[]> = {
       ],
     },
     {
-      name: "Phrygian Rage (i–♭II–i–♭II–iv–i)",
+      name: "Phrygian Rage (i–♭II–iv–i)",
       mode: "phrygian",
       steps: [
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 1, quality: "maj", roman: "♭II" },
         { degree: 0, quality: "min", roman: "i" },
         { degree: 1, quality: "maj", roman: "♭II" },
         { degree: 3, quality: "min", roman: "iv" },
