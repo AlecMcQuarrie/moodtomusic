@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import {
   MOODS,
   generateProgression,
+  transposeProgression,
   ChordProgression,
   NoteName,
 } from "@/lib/musicTheory";
@@ -85,19 +86,33 @@ export default function Home() {
   const handleKeyChange = useCallback(
     (key: NoteName) => {
       setSelectedKey(key);
-      if (progression && selectedMoods.length > 0) {
+      if (progression) {
+        const wasPlaying = isPlaying;
         stopPlayback();
         setIsPlaying(false);
         setActiveChordIndex(-1);
 
-        const moodId =
-          selectedMoods[Math.floor(Math.random() * selectedMoods.length)];
-        const prog = generateProgression(moodId, key);
-        setProgression(prog);
-        progressionRef.current = prog;
+        const transposed = transposeProgression(progression, key);
+        setProgression(transposed);
+        progressionRef.current = transposed;
+
+        // Restart playback if it was playing
+        if (wasPlaying) {
+          startAudioContext().then(() => {
+            setIsPlaying(true);
+            setActiveChordIndex(0);
+            playProgression(transposed, bpm, {
+              onChordChange: (index) => setActiveChordIndex(index),
+              onStop: () => {
+                setIsPlaying(false);
+                setActiveChordIndex(-1);
+              },
+            });
+          });
+        }
       }
     },
-    [progression, selectedMoods]
+    [progression, isPlaying, bpm]
   );
 
   return (
@@ -227,10 +242,11 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-white/[0.04] mt-16">
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <p className="text-xs text-neutral-700 text-center">
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+          <p className="text-xs text-neutral-700">
             Built with real music theory — scales, modes, and voice leading
           </p>
+          <p className="text-xs text-neutral-700 font-mono">v0.3.0</p>
         </div>
       </footer>
     </div>

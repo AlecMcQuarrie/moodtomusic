@@ -773,4 +773,38 @@ export function midiToNoteName(midi: number): string {
   return `${note}${octave}`;
 }
 
+// ── Transposition ────────────────────────────────────────────────────
+// Transposes an existing progression to a new key, preserving all
+// chord qualities, durations, roman numerals, and structure.
+
+export function transposeProgression(
+  progression: ChordProgression,
+  newKey: NoteName
+): ChordProgression {
+  const oldKeyIndex = ALL_NOTES.indexOf(progression.key);
+  const newKeyIndex = ALL_NOTES.indexOf(newKey);
+  const semitoneShift = ((newKeyIndex - oldKeyIndex) + 12) % 12;
+
+  if (semitoneShift === 0) return progression;
+
+  const transposedChords = progression.chords.map((chord) => {
+    const newRoot = transposeNote(chord.root, semitoneShift);
+    const newMidiNotes = chord.midiNotes.map((n) => n + semitoneShift);
+    const newLabel = chord.label.replace(chord.root, newRoot);
+
+    return {
+      ...chord,
+      root: newRoot,
+      midiNotes: newMidiNotes,
+      label: newLabel,
+    };
+  });
+
+  return {
+    ...progression,
+    key: newKey,
+    chords: transposedChords,
+  };
+}
+
 export const KEY_OPTIONS: NoteName[] = ALL_NOTES;
