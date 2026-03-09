@@ -62,29 +62,29 @@ export default function PianoRoll({
     const rowHeight = Math.max(Math.floor(height / noteRange), 12);
     const actualHeight = rowHeight * noteRange;
 
+    const totalBeats = progression.totalBeats;
+    const pxPerBeat = rollWidth / totalBeats;
+
     // Background
     ctx.fillStyle = "#0a0a0a";
     ctx.fillRect(0, 0, width, height);
 
     const yOffset = Math.max(0, (height - actualHeight) / 2);
 
-    // Draw rows (piano key labels on the left)
+    // Draw rows (piano key labels)
     for (let n = maxNote; n >= minNote; n--) {
       const row = maxNote - n;
       const y = yOffset + row * rowHeight;
       const isBlack = isBlackKey(n);
 
-      // Row background
       ctx.fillStyle = isBlack
         ? "rgba(255,255,255,0.015)"
         : "rgba(255,255,255,0.03)";
       ctx.fillRect(keyLabelWidth, y, rollWidth, rowHeight);
 
-      // Row border
       ctx.fillStyle = "rgba(255,255,255,0.04)";
       ctx.fillRect(keyLabelWidth, y + rowHeight - 0.5, rollWidth, 0.5);
 
-      // Key label
       ctx.fillStyle = isBlack
         ? "rgba(255,255,255,0.2)"
         : "rgba(255,255,255,0.35)";
@@ -93,79 +93,80 @@ export default function PianoRoll({
       ctx.fillText(noteName(n), keyLabelWidth - 6, y + rowHeight / 2 + 3.5);
     }
 
-    // Key label separator line
+    // Key label separator
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     ctx.fillRect(keyLabelWidth, yOffset, 1, actualHeight);
 
-    // Draw chord columns
-    const chordCount = progression.chords.length;
-    const colWidth = rollWidth / chordCount;
+    // Draw bar lines
+    const totalBars = totalBeats / 4;
+    for (let bar = 1; bar < totalBars; bar++) {
+      const x = keyLabelWidth + bar * 4 * pxPerBeat;
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fillRect(x, yOffset, 0.5, actualHeight);
+    }
 
-    for (let i = 0; i < chordCount; i++) {
-      // Column border
+    // Draw beat subdivisions
+    for (let beat = 0; beat < totalBeats; beat++) {
+      if (beat % 4 === 0) continue; // skip bar lines
+      const x = keyLabelWidth + beat * pxPerBeat;
+      ctx.fillStyle = "rgba(255,255,255,0.025)";
+      ctx.fillRect(x, yOffset, 0.5, actualHeight);
+    }
+
+    // Draw chord regions and notes
+    let beatOffset = 0;
+    for (let i = 0; i < progression.chords.length; i++) {
+      const chord = progression.chords[i];
+      const chordX = keyLabelWidth + beatOffset * pxPerBeat;
+      const chordWidth = chord.durationBeats * pxPerBeat;
+      const isActive = i === activeRef.current && isPlaying;
+
+      // Chord boundary line
       if (i > 0) {
         ctx.fillStyle = "rgba(255,255,255,0.06)";
-        ctx.fillRect(keyLabelWidth + i * colWidth, yOffset, 0.5, actualHeight);
+        ctx.fillRect(chordX, yOffset, 0.5, actualHeight);
       }
-
-      // Beat subdivisions
-      for (let beat = 1; beat < 4; beat++) {
-        const bx = keyLabelWidth + i * colWidth + (beat / 4) * colWidth;
-        ctx.fillStyle = "rgba(255,255,255,0.025)";
-        ctx.fillRect(bx, yOffset, 0.5, actualHeight);
-      }
-
-      const chord = progression.chords[i];
-      const isActive = i === activeRef.current && isPlaying;
-      const noteGap = 2;
-      const noteWidth = colWidth - noteGap * 2;
 
       // Active column highlight
       if (isActive) {
         ctx.fillStyle = "rgba(255,255,255,0.02)";
-        ctx.fillRect(
-          keyLabelWidth + i * colWidth,
-          yOffset,
-          colWidth,
-          actualHeight
-        );
+        ctx.fillRect(chordX, yOffset, chordWidth, actualHeight);
       }
 
       // Notes
+      const noteGap = 2;
+      const noteWidth = chordWidth - noteGap * 2;
+
       for (const midi of chord.midiNotes) {
         if (midi < minNote || midi > maxNote) continue;
         const row = maxNote - midi;
         const y = yOffset + row * rowHeight;
 
-        const noteX = keyLabelWidth + i * colWidth + noteGap;
+        const noteX = chordX + noteGap;
         const noteY = y + 1;
         const noteH = rowHeight - 2;
 
         if (isActive) {
-          // Active note — glowing
           const gradient = ctx.createLinearGradient(
-            noteX,
-            noteY,
-            noteX + noteWidth,
-            noteY
+            noteX, noteY, noteX + noteWidth, noteY
           );
           gradient.addColorStop(0, "rgba(255,255,255,0.85)");
           gradient.addColorStop(1, "rgba(200,210,255,0.75)");
           ctx.fillStyle = gradient;
 
-          // Glow
           ctx.shadowColor = "rgba(180,200,255,0.5)";
           ctx.shadowBlur = 12;
           roundRect(ctx, noteX, noteY, noteWidth, noteH, 4);
           ctx.fill();
           ctx.shadowBlur = 0;
         } else {
-          // Inactive note
           ctx.fillStyle = "rgba(255,255,255,0.15)";
           roundRect(ctx, noteX, noteY, noteWidth, noteH, 4);
           ctx.fill();
         }
       }
+
+      beatOffset += chord.durationBeats;
     }
   }, [progression, isPlaying]);
 
@@ -210,11 +211,7 @@ export default function PianoRoll({
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number
+  x: number, y: number, w: number, h: number, r: number
 ) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);

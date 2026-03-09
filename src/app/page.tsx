@@ -115,7 +115,7 @@ export default function Home() {
           </div>
           <div className="text-xs text-neutral-600 font-mono">
             {progression
-              ? `${progression.chords.length} chords · ${progression.mode}`
+              ? `${progression.chords.length} chords · ${progression.totalBeats / 4} bars · ${progression.mode}`
               : "Select a mood to begin"}
           </div>
         </div>
@@ -202,9 +202,15 @@ export default function Home() {
                   <span className="text-neutral-300">{progression.mood}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-neutral-500">Key</span>
+                  <span className="text-neutral-500">Key / Mode</span>
                   <span className="text-neutral-300">
                     {progression.key} {progression.mode}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Length</span>
+                  <span className="text-neutral-300">
+                    {progression.totalBeats / 4} bars · {progression.chords.length} chords
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -212,10 +218,6 @@ export default function Home() {
                   <span className="text-neutral-300 font-mono text-xs">
                     {progression.chords.map((c) => c.romanNumeral).join(" → ")}
                   </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Template</span>
-                  <span className="text-neutral-300">{progression.name}</span>
                 </div>
               </div>
             </section>

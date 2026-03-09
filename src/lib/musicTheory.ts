@@ -1,36 +1,18 @@
-// ── Core music theory types ──────────────────────────────────────────
+// ── Core types ───────────────────────────────────────────────────────
 
 export type NoteName =
-  | "C"
-  | "C#"
-  | "D"
-  | "D#"
-  | "E"
-  | "F"
-  | "F#"
-  | "G"
-  | "G#"
-  | "A"
-  | "A#"
-  | "B";
+  | "C" | "C#" | "D" | "D#" | "E" | "F"
+  | "F#" | "G" | "G#" | "A" | "A#" | "B";
 
 export type ChordQuality =
-  | "maj"
-  | "min"
-  | "dim"
-  | "aug"
-  | "maj7"
-  | "min7"
-  | "dom7"
-  | "dim7"
-  | "min7b5"
-  | "aug7"
-  | "sus2"
-  | "sus4"
-  | "add9"
-  | "min9"
-  | "maj9"
-  | "dom9";
+  | "maj" | "min" | "dim" | "aug"
+  | "maj7" | "min7" | "dom7" | "dim7" | "min7b5"
+  | "sus2" | "sus4"
+  | "add9" | "min9" | "maj9" | "dom9";
+
+export type HarmonicFunction = "tonic" | "subdominant" | "dominant" | "predominant";
+
+export type ModeName = "major" | "minor" | "dorian" | "mixolydian" | "phrygian" | "lydian";
 
 export interface Chord {
   root: NoteName;
@@ -38,14 +20,16 @@ export interface Chord {
   midiNotes: number[];
   label: string;
   romanNumeral: string;
+  durationBeats: number;
+  function: HarmonicFunction;
 }
 
 export interface ChordProgression {
   chords: Chord[];
   key: NoteName;
-  mode: "major" | "minor" | "dorian" | "mixolydian" | "phrygian" | "lydian";
+  mode: ModeName;
   mood: string;
-  name: string;
+  totalBeats: number;
 }
 
 export interface Mood {
@@ -73,7 +57,6 @@ const CHORD_INTERVALS: Record<ChordQuality, number[]> = {
   dom7: [0, 4, 7, 10],
   dim7: [0, 3, 6, 9],
   min7b5: [0, 3, 6, 10],
-  aug7: [0, 4, 8, 10],
   sus2: [0, 2, 7],
   sus4: [0, 5, 7],
   add9: [0, 4, 7, 14],
@@ -82,33 +65,300 @@ const CHORD_INTERVALS: Record<ChordQuality, number[]> = {
   dom9: [0, 4, 7, 10, 14],
 };
 
-const SCALE_INTERVALS: Record<string, number[]> = {
-  major: [0, 2, 4, 5, 7, 9, 11],
-  minor: [0, 2, 3, 5, 7, 8, 10],
-  dorian: [0, 2, 3, 5, 7, 9, 10],
+const SCALE_INTERVALS: Record<ModeName, number[]> = {
+  major:      [0, 2, 4, 5, 7, 9, 11],
+  minor:      [0, 2, 3, 5, 7, 8, 10],
+  dorian:     [0, 2, 3, 5, 7, 9, 10],
   mixolydian: [0, 2, 4, 5, 7, 9, 10],
-  phrygian: [0, 1, 3, 5, 7, 8, 10],
-  lydian: [0, 2, 4, 6, 7, 9, 11],
+  phrygian:   [0, 1, 3, 5, 7, 8, 10],
+  lydian:     [0, 2, 4, 6, 7, 9, 11],
 };
 
-// ── Available moods ──────────────────────────────────────────────────
+const QUALITY_LABELS: Record<ChordQuality, string> = {
+  maj: "", min: "m", dim: "°", aug: "+",
+  maj7: "maj7", min7: "m7", dom7: "7", dim7: "°7",
+  min7b5: "ø7", sus2: "sus2", sus4: "sus4",
+  add9: "add9", min9: "m9", maj9: "maj9", dom9: "9",
+};
 
-export const MOODS: Mood[] = [
-  { id: "joyful", name: "Joyful", emoji: "☀️", description: "Bright and uplifting", color: "#F59E0B", category: "positive" },
-  { id: "peaceful", name: "Peaceful", emoji: "🌿", description: "Calm and serene", color: "#10B981", category: "positive" },
-  { id: "romantic", name: "Romantic", emoji: "🌹", description: "Warm and tender", color: "#EC4899", category: "positive" },
-  { id: "triumphant", name: "Triumphant", emoji: "⚡", description: "Victorious and powerful", color: "#F97316", category: "positive" },
-  { id: "nostalgic", name: "Nostalgic", emoji: "🌅", description: "Bittersweet memories", color: "#8B5CF6", category: "neutral" },
-  { id: "dreamy", name: "Dreamy", emoji: "☁️", description: "Floating and ethereal", color: "#6366F1", category: "neutral" },
-  { id: "mysterious", name: "Mysterious", emoji: "🌙", description: "Enigmatic and curious", color: "#7C3AED", category: "neutral" },
-  { id: "melancholic", name: "Melancholic", emoji: "🌧️", description: "Gentle sadness", color: "#6B7280", category: "negative" },
-  { id: "anxious", name: "Anxious", emoji: "💫", description: "Tense and unsettled", color: "#EF4444", category: "intense" },
-  { id: "angry", name: "Angry", emoji: "🔥", description: "Fierce and aggressive", color: "#DC2626", category: "intense" },
-  { id: "hopeful", name: "Hopeful", emoji: "🌱", description: "Gently optimistic", color: "#14B8A6", category: "positive" },
-  { id: "contemplative", name: "Contemplative", emoji: "🔮", description: "Deep in thought", color: "#8B5CF6", category: "neutral" },
+// ── Scale degree definitions per mode ────────────────────────────────
+// Each degree has: its natural diatonic quality, roman numeral, and
+// harmonic function. This is the foundation of the generative system.
+
+interface ScaleDegreeInfo {
+  quality: ChordQuality;
+  roman: string;
+  function: HarmonicFunction;
+}
+
+const MAJOR_DEGREES: ScaleDegreeInfo[] = [
+  { quality: "maj",    roman: "I",    function: "tonic" },
+  { quality: "min",    roman: "ii",   function: "predominant" },
+  { quality: "min",    roman: "iii",  function: "tonic" },
+  { quality: "maj",    roman: "IV",   function: "subdominant" },
+  { quality: "maj",    roman: "V",    function: "dominant" },
+  { quality: "min",    roman: "vi",   function: "tonic" },
+  { quality: "dim",    roman: "vii°", function: "dominant" },
 ];
 
-// ── Helpers ──────────────────────────────────────────────────────────
+const MINOR_DEGREES: ScaleDegreeInfo[] = [
+  { quality: "min",    roman: "i",    function: "tonic" },
+  { quality: "dim",    roman: "ii°",  function: "predominant" },
+  { quality: "maj",    roman: "III",  function: "tonic" },
+  { quality: "min",    roman: "iv",   function: "subdominant" },
+  { quality: "min",    roman: "v",    function: "dominant" },
+  { quality: "maj",    roman: "VI",   function: "subdominant" },
+  { quality: "maj",    roman: "VII",  function: "dominant" },
+];
+
+const DORIAN_DEGREES: ScaleDegreeInfo[] = [
+  { quality: "min",    roman: "i",    function: "tonic" },
+  { quality: "min",    roman: "ii",   function: "predominant" },
+  { quality: "maj",    roman: "III",  function: "tonic" },
+  { quality: "maj",    roman: "IV",   function: "subdominant" },
+  { quality: "min",    roman: "v",    function: "dominant" },
+  { quality: "dim",    roman: "vi°",  function: "subdominant" },
+  { quality: "maj",    roman: "VII",  function: "dominant" },
+];
+
+const MIXOLYDIAN_DEGREES: ScaleDegreeInfo[] = [
+  { quality: "maj",    roman: "I",    function: "tonic" },
+  { quality: "min",    roman: "ii",   function: "predominant" },
+  { quality: "dim",    roman: "iii°", function: "dominant" },
+  { quality: "maj",    roman: "IV",   function: "subdominant" },
+  { quality: "min",    roman: "v",    function: "dominant" },
+  { quality: "min",    roman: "vi",   function: "tonic" },
+  { quality: "maj",    roman: "♭VII", function: "subdominant" },
+];
+
+const PHRYGIAN_DEGREES: ScaleDegreeInfo[] = [
+  { quality: "min",    roman: "i",    function: "tonic" },
+  { quality: "maj",    roman: "♭II",  function: "subdominant" },
+  { quality: "maj",    roman: "III",  function: "tonic" },
+  { quality: "min",    roman: "iv",   function: "subdominant" },
+  { quality: "dim",    roman: "v°",   function: "dominant" },
+  { quality: "maj",    roman: "♭VI",  function: "subdominant" },
+  { quality: "min",    roman: "♭vii", function: "dominant" },
+];
+
+const LYDIAN_DEGREES: ScaleDegreeInfo[] = [
+  { quality: "maj",    roman: "I",    function: "tonic" },
+  { quality: "maj",    roman: "II",   function: "subdominant" },
+  { quality: "min",    roman: "iii",  function: "tonic" },
+  { quality: "aug",    roman: "IV+",  function: "subdominant" },
+  { quality: "maj",    roman: "V",    function: "dominant" },
+  { quality: "min",    roman: "vi",   function: "tonic" },
+  { quality: "dim",    roman: "vii°", function: "dominant" },
+];
+
+const MODE_DEGREES: Record<ModeName, ScaleDegreeInfo[]> = {
+  major: MAJOR_DEGREES,
+  minor: MINOR_DEGREES,
+  dorian: DORIAN_DEGREES,
+  mixolydian: MIXOLYDIAN_DEGREES,
+  phrygian: PHRYGIAN_DEGREES,
+  lydian: LYDIAN_DEGREES,
+};
+
+// ── Harmonic function transition rules ───────────────────────────────
+// These encode the fundamental voice-leading tendencies of tonal music.
+// T = tonic, S = subdominant, P = predominant, D = dominant
+//
+// Standard: T → (any)     S → D or T     P → D     D → T
+// With flexibility for color and variety.
+
+type TransitionMap = Record<HarmonicFunction, HarmonicFunction[]>;
+
+const STANDARD_TRANSITIONS: TransitionMap = {
+  tonic:        ["subdominant", "predominant", "dominant", "tonic"],
+  subdominant:  ["dominant", "tonic", "predominant"],
+  predominant:  ["dominant", "subdominant"],
+  dominant:     ["tonic", "subdominant"],  // deceptive resolution possible
+};
+
+// ── Mood profiles ────────────────────────────────────────────────────
+// Each mood defines: which modes to pick from, how likely to use
+// extensions (7ths/9ths), how likely to use sus chords, how much
+// chromaticism, preferred phrase lengths, and transition looseness.
+
+interface MoodProfile {
+  modes: ModeName[];
+  modeWeights: number[];
+  extensionChance: number;     // 0-1, chance to upgrade triad → 7th/9th
+  susChance: number;           // 0-1, chance to use sus2/sus4 on tonic
+  chromaticChance: number;     // 0-1, chance of modal interchange / borrowed chord
+  phraseLengths: number[];     // 16 = 4 bars, 32 = 8 bars (in beats)
+  phraseWeights: number[];
+  looseTransitions: boolean;   // allow non-standard function movement
+  preferredCadence: "authentic" | "plagal" | "deceptive" | "half" | "mixed";
+  rhythmStyle: "even" | "varied" | "halves";
+}
+
+const MOOD_PROFILES: Record<string, MoodProfile> = {
+  joyful: {
+    modes: ["major", "lydian", "mixolydian"],
+    modeWeights: [5, 2, 2],
+    extensionChance: 0.25,
+    susChance: 0.05,
+    chromaticChance: 0.1,
+    phraseLengths: [16, 32],
+    phraseWeights: [3, 1],
+    looseTransitions: false,
+    preferredCadence: "authentic",
+    rhythmStyle: "even",
+  },
+  peaceful: {
+    modes: ["major", "lydian"],
+    modeWeights: [3, 2],
+    extensionChance: 0.6,
+    susChance: 0.3,
+    chromaticChance: 0.05,
+    phraseLengths: [16, 32],
+    phraseWeights: [2, 3],
+    looseTransitions: false,
+    preferredCadence: "plagal",
+    rhythmStyle: "varied",
+  },
+  romantic: {
+    modes: ["major", "dorian", "mixolydian"],
+    modeWeights: [5, 2, 1],
+    extensionChance: 0.55,
+    susChance: 0.1,
+    chromaticChance: 0.15,
+    phraseLengths: [16, 32],
+    phraseWeights: [2, 3],
+    looseTransitions: false,
+    preferredCadence: "mixed",
+    rhythmStyle: "varied",
+  },
+  triumphant: {
+    modes: ["major", "mixolydian"],
+    modeWeights: [4, 2],
+    extensionChance: 0.1,
+    susChance: 0.05,
+    chromaticChance: 0.1,
+    phraseLengths: [16, 32],
+    phraseWeights: [2, 3],
+    looseTransitions: false,
+    preferredCadence: "authentic",
+    rhythmStyle: "even",
+  },
+  nostalgic: {
+    modes: ["major", "minor", "dorian"],
+    modeWeights: [3, 3, 2],
+    extensionChance: 0.45,
+    susChance: 0.1,
+    chromaticChance: 0.2,
+    phraseLengths: [16, 32],
+    phraseWeights: [2, 2],
+    looseTransitions: true,
+    preferredCadence: "deceptive",
+    rhythmStyle: "varied",
+  },
+  dreamy: {
+    modes: ["lydian", "major"],
+    modeWeights: [3, 2],
+    extensionChance: 0.7,
+    susChance: 0.35,
+    chromaticChance: 0.1,
+    phraseLengths: [16, 32],
+    phraseWeights: [1, 3],
+    looseTransitions: true,
+    preferredCadence: "plagal",
+    rhythmStyle: "varied",
+  },
+  mysterious: {
+    modes: ["phrygian", "minor"],
+    modeWeights: [3, 2],
+    extensionChance: 0.4,
+    susChance: 0.1,
+    chromaticChance: 0.3,
+    phraseLengths: [16, 32],
+    phraseWeights: [3, 2],
+    looseTransitions: true,
+    preferredCadence: "half",
+    rhythmStyle: "varied",
+  },
+  melancholic: {
+    modes: ["minor", "dorian", "major"],
+    modeWeights: [4, 2, 1],
+    extensionChance: 0.5,
+    susChance: 0.15,
+    chromaticChance: 0.15,
+    phraseLengths: [16, 32],
+    phraseWeights: [2, 3],
+    looseTransitions: false,
+    preferredCadence: "plagal",
+    rhythmStyle: "varied",
+  },
+  anxious: {
+    modes: ["minor", "phrygian"],
+    modeWeights: [3, 2],
+    extensionChance: 0.35,
+    susChance: 0.05,
+    chromaticChance: 0.35,
+    phraseLengths: [16],
+    phraseWeights: [1],
+    looseTransitions: true,
+    preferredCadence: "half",
+    rhythmStyle: "halves",
+  },
+  angry: {
+    modes: ["minor", "phrygian"],
+    modeWeights: [3, 3],
+    extensionChance: 0.15,
+    susChance: 0.0,
+    chromaticChance: 0.25,
+    phraseLengths: [16],
+    phraseWeights: [1],
+    looseTransitions: true,
+    preferredCadence: "half",
+    rhythmStyle: "even",
+  },
+  hopeful: {
+    modes: ["major", "mixolydian", "lydian"],
+    modeWeights: [4, 2, 1],
+    extensionChance: 0.35,
+    susChance: 0.15,
+    chromaticChance: 0.1,
+    phraseLengths: [16, 32],
+    phraseWeights: [3, 2],
+    looseTransitions: false,
+    preferredCadence: "authentic",
+    rhythmStyle: "varied",
+  },
+  contemplative: {
+    modes: ["dorian", "major", "minor"],
+    modeWeights: [3, 2, 2],
+    extensionChance: 0.6,
+    susChance: 0.2,
+    chromaticChance: 0.1,
+    phraseLengths: [16, 32],
+    phraseWeights: [1, 3],
+    looseTransitions: true,
+    preferredCadence: "plagal",
+    rhythmStyle: "varied",
+  },
+};
+
+// ── Moods (unchanged) ────────────────────────────────────────────────
+
+export const MOODS: Mood[] = [
+  { id: "joyful",        name: "Joyful",        emoji: "☀️",  description: "Bright and uplifting",   color: "#F59E0B", category: "positive" },
+  { id: "peaceful",      name: "Peaceful",      emoji: "🌿",  description: "Calm and serene",        color: "#10B981", category: "positive" },
+  { id: "romantic",      name: "Romantic",       emoji: "🌹",  description: "Warm and tender",        color: "#EC4899", category: "positive" },
+  { id: "triumphant",    name: "Triumphant",     emoji: "⚡",  description: "Victorious and powerful", color: "#F97316", category: "positive" },
+  { id: "nostalgic",     name: "Nostalgic",      emoji: "🌅",  description: "Bittersweet memories",   color: "#8B5CF6", category: "neutral" },
+  { id: "dreamy",        name: "Dreamy",         emoji: "☁️",  description: "Floating and ethereal",  color: "#6366F1", category: "neutral" },
+  { id: "mysterious",    name: "Mysterious",     emoji: "🌙",  description: "Enigmatic and curious",  color: "#7C3AED", category: "neutral" },
+  { id: "melancholic",   name: "Melancholic",    emoji: "🌧️",  description: "Gentle sadness",         color: "#6B7280", category: "negative" },
+  { id: "anxious",       name: "Anxious",        emoji: "💫",  description: "Tense and unsettled",    color: "#EF4444", category: "intense" },
+  { id: "angry",         name: "Angry",          emoji: "🔥",  description: "Fierce and aggressive",  color: "#DC2626", category: "intense" },
+  { id: "hopeful",       name: "Hopeful",        emoji: "🌱",  description: "Gently optimistic",      color: "#14B8A6", category: "positive" },
+  { id: "contemplative", name: "Contemplative",  emoji: "🔮",  description: "Deep in thought",        color: "#8B5CF6", category: "neutral" },
+];
+
+// ── Utility functions ────────────────────────────────────────────────
 
 function noteToMidi(note: NoteName, octave: number): number {
   return ALL_NOTES.indexOf(note) + (octave + 1) * 12;
@@ -116,595 +366,411 @@ function noteToMidi(note: NoteName, octave: number): number {
 
 function transposeNote(root: NoteName, semitones: number): NoteName {
   const idx = ALL_NOTES.indexOf(root);
-  return ALL_NOTES[(idx + semitones + 12) % 12];
+  return ALL_NOTES[(idx + ((semitones % 12) + 12) % 12) % 12];
 }
 
-function buildChord(
-  root: NoteName,
+function weightedRandom<T>(items: T[], weights: number[]): T {
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return items[i];
+  }
+  return items[items.length - 1];
+}
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ── Chord building ───────────────────────────────────────────────────
+
+function buildChordFromDegree(
+  key: NoteName,
+  mode: ModeName,
+  degree: number,
   quality: ChordQuality,
-  octave: number = 4,
-  romanNumeral: string = ""
+  roman: string,
+  harmonicFn: HarmonicFunction,
+  durationBeats: number,
+  octave: number = 4
 ): Chord {
+  const scaleIntervals = SCALE_INTERVALS[mode];
+  const root = transposeNote(key, scaleIntervals[degree]);
   const intervals = CHORD_INTERVALS[quality];
   const rootMidi = noteToMidi(root, octave);
   const midiNotes = intervals.map((i) => rootMidi + i);
 
-  const qualityLabels: Record<ChordQuality, string> = {
-    maj: "", min: "m", dim: "°", aug: "+",
-    maj7: "maj7", min7: "m7", dom7: "7", dim7: "°7",
-    min7b5: "ø7", aug7: "+7", sus2: "sus2", sus4: "sus4",
-    add9: "add9", min9: "m9", maj9: "maj9", dom9: "9",
-  };
+  let label = `${root}${QUALITY_LABELS[quality]}`;
+  // Append duration hint for display if not a whole note
+  const durationLabel =
+    durationBeats === 4 ? "" :
+    durationBeats === 2 ? " (½)" :
+    durationBeats === 8 ? " (𝅝𝅝)" : "";
 
   return {
     root,
     quality,
     midiNotes,
-    label: `${root}${qualityLabels[quality]}`,
-    romanNumeral,
+    label: label + durationLabel,
+    romanNumeral: roman + (QUALITY_LABELS[quality] && !roman.includes("7") && !roman.includes("°") && !roman.includes("ø") && !roman.includes("+") && !roman.includes("sus") ? "" : ""),
+    durationBeats,
+    function: harmonicFn,
   };
 }
 
-function getScaleDegreeChord(
+// ── Extension / quality upgrading ────────────────────────────────────
+// Upgrades a plain triad to a 7th or 9th based on mood profile chance.
+
+function maybeExtend(
+  baseQuality: ChordQuality,
+  extensionChance: number,
+  susChance: number,
+  harmonicFn: HarmonicFunction,
+): { quality: ChordQuality; romanSuffix: string } {
+  // Sus chords only on tonic function
+  if (harmonicFn === "tonic" && Math.random() < susChance) {
+    const sus = Math.random() < 0.5 ? "sus2" : "sus4";
+    return { quality: sus, romanSuffix: sus };
+  }
+
+  if (Math.random() > extensionChance) {
+    return { quality: baseQuality, romanSuffix: "" };
+  }
+
+  // Upgrade based on base quality
+  const use9th = Math.random() < 0.25;
+
+  if (baseQuality === "maj") {
+    if (use9th) return { quality: "maj9", romanSuffix: "maj9" };
+    return { quality: "maj7", romanSuffix: "maj7" };
+  }
+  if (baseQuality === "min") {
+    if (use9th) return { quality: "min9", romanSuffix: "m9" };
+    return { quality: "min7", romanSuffix: "m7" };
+  }
+  if (baseQuality === "dim") {
+    return { quality: "min7b5", romanSuffix: "ø7" };
+  }
+
+  return { quality: baseQuality, romanSuffix: "" };
+}
+
+// ── Rhythm generation ────────────────────────────────────────────────
+// Generates a sequence of durations (in beats) that sums to exactly
+// totalBeats. Only uses musically sensible note values: 2 or 4 beats
+// (half notes and whole notes).
+
+function generateRhythm(
+  totalBeats: number,
+  style: "even" | "varied" | "halves"
+): number[] {
+  if (style === "even") {
+    // All whole notes
+    const count = totalBeats / 4;
+    return Array(count).fill(4);
+  }
+
+  if (style === "halves") {
+    // All half notes
+    const count = totalBeats / 2;
+    return Array(count).fill(2);
+  }
+
+  // "varied" — mix of whole and half notes
+  // Fill totalBeats with a random mixture, bar by bar
+  const durations: number[] = [];
+  let remaining = totalBeats;
+
+  while (remaining > 0) {
+    if (remaining === 2) {
+      durations.push(2);
+      remaining -= 2;
+    } else if (remaining === 4) {
+      // Last bar: whole note or two halves
+      if (Math.random() < 0.6) {
+        durations.push(4);
+      } else {
+        durations.push(2, 2);
+      }
+      remaining = 0;
+    } else {
+      // More than one bar left — decide this bar
+      const r = Math.random();
+      if (r < 0.5) {
+        // Whole note for this bar
+        durations.push(4);
+        remaining -= 4;
+      } else {
+        // Two half notes for this bar
+        durations.push(2, 2);
+        remaining -= 4;
+      }
+    }
+  }
+
+  return durations;
+}
+
+// ── Cadence generation ───────────────────────────────────────────────
+// Returns the last 2 degrees for a cadence pattern.
+
+interface CadenceChord {
+  degree: number;
+  forceQuality?: ChordQuality;
+  forcedRoman?: string;
+}
+
+function getCadence(
+  mode: ModeName,
+  type: "authentic" | "plagal" | "deceptive" | "half" | "mixed"
+): CadenceChord[] {
+  const actualType = type === "mixed"
+    ? pickRandom(["authentic", "plagal", "deceptive", "half"] as const)
+    : type;
+
+  const isMinorLike = mode === "minor" || mode === "dorian" || mode === "phrygian";
+
+  switch (actualType) {
+    case "authentic":
+      // V → I (with major V in minor = harmonic minor)
+      if (isMinorLike) {
+        return [
+          { degree: 4, forceQuality: "maj", forcedRoman: "V" },
+          { degree: 0 },
+        ];
+      }
+      return [{ degree: 4 }, { degree: 0 }];
+
+    case "plagal":
+      // IV → I
+      return [
+        { degree: isMinorLike ? 3 : 3 },
+        { degree: 0 },
+      ];
+
+    case "deceptive":
+      // V → vi (or V → VI in minor)
+      if (isMinorLike) {
+        return [
+          { degree: 4, forceQuality: "maj", forcedRoman: "V" },
+          { degree: 5 },
+        ];
+      }
+      return [{ degree: 4 }, { degree: 5 }];
+
+    case "half":
+      // ends on V
+      return [
+        { degree: isMinorLike ? 3 : 1 },
+        { degree: 4, forceQuality: isMinorLike ? "maj" : undefined, forcedRoman: isMinorLike ? "V" : undefined },
+      ];
+
+    default:
+      return [{ degree: 4 }, { degree: 0 }];
+  }
+}
+
+// ── Core generation algorithm ────────────────────────────────────────
+
+function getNextDegree(
+  currentDegree: number,
+  currentFunction: HarmonicFunction,
+  degrees: ScaleDegreeInfo[],
+  profile: MoodProfile,
+): number {
+  // Get allowed next functions
+  let allowedFunctions = STANDARD_TRANSITIONS[currentFunction];
+
+  // Loose transitions allow any function
+  if (profile.looseTransitions && Math.random() < 0.3) {
+    allowedFunctions = ["tonic", "subdominant", "predominant", "dominant"];
+  }
+
+  // Find all degrees matching allowed functions (excluding current degree
+  // unless we're on tonic — pedal tones on I are fine)
+  const candidates: { degree: number; weight: number }[] = [];
+
+  for (let d = 0; d < 7; d++) {
+    if (d === currentDegree && currentFunction !== "tonic") continue;
+    const info = degrees[d];
+    if (allowedFunctions.includes(info.function)) {
+      // Weight by stepwise motion preference (closer = more likely)
+      const distance = Math.min(
+        Math.abs(d - currentDegree),
+        7 - Math.abs(d - currentDegree)
+      );
+      // Strong preferences: step of 1 or 4th/5th motion
+      let weight = distance === 1 ? 4 :
+                   distance === 3 ? 3 :
+                   distance === 4 ? 3 :
+                   distance === 2 ? 2 : 1;
+
+      // Boost root (degree 0) slightly — we want to visit home
+      if (d === 0) weight += 1;
+
+      candidates.push({ degree: d, weight });
+    }
+  }
+
+  if (candidates.length === 0) {
+    // Fallback: go to tonic
+    return 0;
+  }
+
+  return weightedRandom(
+    candidates.map((c) => c.degree),
+    candidates.map((c) => c.weight)
+  );
+}
+
+// ── Borrowed / chromatic chord ───────────────────────────────────────
+// Applies modal interchange: borrows a chord from a parallel mode.
+
+function maybeBorrowChord(
   key: NoteName,
-  mode: string,
+  mode: ModeName,
   degree: number,
-  quality: ChordQuality,
-  romanNumeral: string,
-  octave: number = 4
-): Chord {
-  const intervals = SCALE_INTERVALS[mode];
-  const root = transposeNote(key, intervals[degree]);
-  return buildChord(root, quality, octave, romanNumeral);
+  profile: MoodProfile,
+): { borrowedMode: ModeName; degree: number } | null {
+  if (Math.random() > profile.chromaticChance) return null;
+
+  // Pick a parallel mode to borrow from
+  const borrowModes: ModeName[] = mode === "major"
+    ? ["minor", "dorian", "mixolydian"]
+    : ["major", "dorian", "lydian"];
+
+  const borrowMode = pickRandom(borrowModes);
+  // Use the same degree from the borrowed mode
+  return { borrowedMode: borrowMode, degree };
 }
 
-// ── Mood-to-progression mappings ─────────────────────────────────────
-// Each mood maps to multiple possible progression templates.
-// Templates use scale degrees (0-indexed) and chord qualities based on
-// real music theory: common progressions, modal interchange, secondary
-// dominants, borrowed chords, and chromatic mediants.
-
-interface ProgressionTemplate {
-  name: string;
-  mode: "major" | "minor" | "dorian" | "mixolydian" | "phrygian" | "lydian";
-  steps: Array<{ degree: number; quality: ChordQuality; roman: string }>;
-}
-
-const MOOD_PROGRESSIONS: Record<string, ProgressionTemplate[]> = {
-  joyful: [
-    {
-      name: "Classic Pop (I–V–vi–IV)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 4, quality: "maj", roman: "V" },
-        { degree: 5, quality: "min", roman: "vi" },
-        { degree: 3, quality: "maj", roman: "IV" },
-      ],
-    },
-    {
-      name: "Bright Lydian Lift (Imaj7–II–vi–IV)",
-      mode: "lydian",
-      steps: [
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 1, quality: "maj", roman: "II" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 3, quality: "maj", roman: "IV" },
-      ],
-    },
-    {
-      name: "Upbeat Shuffle (I–IV–V–V)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 4, quality: "maj", roman: "V" },
-        { degree: 4, quality: "maj", roman: "V" },
-      ],
-    },
-    {
-      name: "Gospel Joy (I–iii–IV–V)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 2, quality: "min7", roman: "iiim7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-        { degree: 4, quality: "dom7", roman: "V7" },
-      ],
-    },
-  ],
-
-  peaceful: [
-    {
-      name: "Ambient Drift (Imaj7–IVmaj7–vim7–IVmaj7)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-      ],
-    },
-    {
-      name: "Suspended Calm (Isus2–IV–Isus4–IV)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "sus2", roman: "Isus2" },
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 0, quality: "sus4", roman: "Isus4" },
-        { degree: 3, quality: "maj", roman: "IV" },
-      ],
-    },
-    {
-      name: "Pastoral Major (I–iii–IV–I)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 2, quality: "min", roman: "iii" },
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 0, quality: "maj", roman: "I" },
-      ],
-    },
-    {
-      name: "Floating Ninths (Imaj9–vim7–IVmaj7–vim7)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj9", roman: "Imaj9" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-      ],
-    },
-  ],
-
-  romantic: [
-    {
-      name: "Ballad (vi–IV–I–V)",
-      mode: "major",
-      steps: [
-        { degree: 5, quality: "min", roman: "vi" },
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 4, quality: "maj", roman: "V" },
-      ],
-    },
-    {
-      name: "Jazz Romance (IIm9–V9–Imaj7–vim7)",
-      mode: "major",
-      steps: [
-        { degree: 1, quality: "min9", roman: "iim9" },
-        { degree: 4, quality: "dom9", roman: "V9" },
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-      ],
-    },
-    {
-      name: "Chromatic Descent (I–V/vii–vi–IV)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 6, quality: "maj", roman: "♭VII" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-      ],
-    },
-    {
-      name: "Tender Waltz (I–vi–ii7–V7)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 5, quality: "min", roman: "vi" },
-        { degree: 1, quality: "min7", roman: "ii7" },
-        { degree: 4, quality: "dom7", roman: "V7" },
-      ],
-    },
-  ],
-
-  triumphant: [
-    {
-      name: "Power Anthem (I–V–vi–IV)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 4, quality: "maj", roman: "V" },
-        { degree: 5, quality: "min", roman: "vi" },
-        { degree: 3, quality: "maj", roman: "IV" },
-      ],
-    },
-    {
-      name: "Heroic Climb (IV–V–vi–I)",
-      mode: "major",
-      steps: [
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 4, quality: "maj", roman: "V" },
-        { degree: 5, quality: "min", roman: "vi" },
-        { degree: 0, quality: "maj", roman: "I" },
-      ],
-    },
-    {
-      name: "Plagal Victory (I–IV–V–I)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 4, quality: "maj", roman: "V" },
-        { degree: 0, quality: "maj", roman: "I" },
-      ],
-    },
-  ],
-
-  nostalgic: [
-    {
-      name: "Retro Pop (I–vi–IV–V)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 5, quality: "min", roman: "vi" },
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 4, quality: "maj", roman: "V" },
-      ],
-    },
-    {
-      name: "Wistful Minor (i–VI–III–VII)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min7", roman: "im7" },
-        { degree: 5, quality: "maj", roman: "VI" },
-        { degree: 2, quality: "maj", roman: "III" },
-        { degree: 6, quality: "maj", roman: "VII" },
-      ],
-    },
-    {
-      name: "Dorian Nostalgia (im7–IV–vim7b5–IV)",
-      mode: "dorian",
-      steps: [
-        { degree: 0, quality: "min7", roman: "im7" },
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 5, quality: "min7b5", roman: "viø7" },
-        { degree: 3, quality: "maj", roman: "IV" },
-      ],
-    },
-    {
-      name: "Memory Lane (IVmaj7–vim7–Imaj7–iiim7)",
-      mode: "major",
-      steps: [
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 2, quality: "min7", roman: "iiim7" },
-      ],
-    },
-  ],
-
-  dreamy: [
-    {
-      name: "Lydian Float (Imaj7–II–viim7–Imaj7)",
-      mode: "lydian",
-      steps: [
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 1, quality: "maj", roman: "II" },
-        { degree: 6, quality: "min7", roman: "viim7" },
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-      ],
-    },
-    {
-      name: "Ethereal Ninths (Imaj9–iiim7–vim7–IVmaj7)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj9", roman: "Imaj9" },
-        { degree: 2, quality: "min7", roman: "iiim7" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-      ],
-    },
-    {
-      name: "Suspended Dream (Isus2–IVadd9–vim7–Isus2)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "sus2", roman: "Isus2" },
-        { degree: 3, quality: "add9", roman: "IVadd9" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 0, quality: "sus2", roman: "Isus2" },
-      ],
-    },
-    {
-      name: "Cloud Nine (IVmaj7–Imaj7–iiim7–vim9)",
-      mode: "major",
-      steps: [
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 2, quality: "min7", roman: "iiim7" },
-        { degree: 5, quality: "min9", roman: "vim9" },
-      ],
-    },
-  ],
-
-  mysterious: [
-    {
-      name: "Phrygian Veil (i–♭II–i–♭VII)",
-      mode: "phrygian",
-      steps: [
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 1, quality: "maj", roman: "♭II" },
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 6, quality: "maj", roman: "♭VII" },
-      ],
-    },
-    {
-      name: "Diminished Mystery (i–°7–♭VI–♭VII)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 6, quality: "dim7", roman: "vii°7" },
-        { degree: 5, quality: "maj", roman: "♭VI" },
-        { degree: 6, quality: "maj", roman: "♭VII" },
-      ],
-    },
-    {
-      name: "Enigma (im7–♭IImaj7–iv7–♭VImaj7)",
-      mode: "phrygian",
-      steps: [
-        { degree: 0, quality: "min7", roman: "im7" },
-        { degree: 1, quality: "maj7", roman: "♭IImaj7" },
-        { degree: 3, quality: "min7", roman: "iv7" },
-        { degree: 5, quality: "maj7", roman: "♭VImaj7" },
-      ],
-    },
-    {
-      name: "Chromatic Shadow (im7–♭II–V7–im7)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min7", roman: "im7" },
-        { degree: 1, quality: "maj", roman: "♭II" },
-        { degree: 4, quality: "dom7", roman: "V7" },
-        { degree: 0, quality: "min7", roman: "im7" },
-      ],
-    },
-  ],
-
-  melancholic: [
-    {
-      name: "Sad Descent (i–VII–VI–V)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 6, quality: "maj", roman: "VII" },
-        { degree: 5, quality: "maj", roman: "VI" },
-        { degree: 4, quality: "maj", roman: "V" },
-      ],
-    },
-    {
-      name: "Aeolian Sorrow (im7–ivm7–♭VImaj7–♭VII)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min7", roman: "im7" },
-        { degree: 3, quality: "min7", roman: "ivm7" },
-        { degree: 5, quality: "maj7", roman: "♭VImaj7" },
-        { degree: 6, quality: "maj", roman: "♭VII" },
-      ],
-    },
-    {
-      name: "Weeping (vim7–IVmaj7–Imaj7–iiim7)",
-      mode: "major",
-      steps: [
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 2, quality: "min7", roman: "iiim7" },
-      ],
-    },
-    {
-      name: "Lonely Walk (im9–♭VImaj7–ivm7–V7)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min9", roman: "im9" },
-        { degree: 5, quality: "maj7", roman: "♭VImaj7" },
-        { degree: 3, quality: "min7", roman: "ivm7" },
-        { degree: 4, quality: "dom7", roman: "V7" },
-      ],
-    },
-  ],
-
-  anxious: [
-    {
-      name: "Tritone Tension (i–♭V–iv–i)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 3, quality: "dim", roman: "♭V°" },
-        { degree: 3, quality: "min", roman: "iv" },
-        { degree: 0, quality: "min", roman: "i" },
-      ],
-    },
-    {
-      name: "Restless (im7–iiø7–V7–im7)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min7", roman: "im7" },
-        { degree: 1, quality: "min7b5", roman: "iiø7" },
-        { degree: 4, quality: "dom7", roman: "V7" },
-        { degree: 0, quality: "min7", roman: "im7" },
-      ],
-    },
-    {
-      name: "Unstable Ground (i–♭II–V7–♭VI)",
-      mode: "phrygian",
-      steps: [
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 1, quality: "maj", roman: "♭II" },
-        { degree: 4, quality: "dom7", roman: "V7" },
-        { degree: 5, quality: "maj", roman: "♭VI" },
-      ],
-    },
-    {
-      name: "Nervous Loop (im7–v7–♭VImaj7–♭VII)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min7", roman: "im7" },
-        { degree: 4, quality: "min7", roman: "vm7" },
-        { degree: 5, quality: "maj7", roman: "♭VImaj7" },
-        { degree: 6, quality: "maj", roman: "♭VII" },
-      ],
-    },
-  ],
-
-  angry: [
-    {
-      name: "Power Minor (i–♭VII–♭VI–V)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 6, quality: "maj", roman: "♭VII" },
-        { degree: 5, quality: "maj", roman: "♭VI" },
-        { degree: 4, quality: "maj", roman: "V" },
-      ],
-    },
-    {
-      name: "Phrygian Rage (i–♭II–iv–i)",
-      mode: "phrygian",
-      steps: [
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 1, quality: "maj", roman: "♭II" },
-        { degree: 3, quality: "min", roman: "iv" },
-        { degree: 0, quality: "min", roman: "i" },
-      ],
-    },
-    {
-      name: "Diminished Fury (i–vii°7–♭VI–V7)",
-      mode: "minor",
-      steps: [
-        { degree: 0, quality: "min", roman: "i" },
-        { degree: 6, quality: "dim7", roman: "vii°7" },
-        { degree: 5, quality: "maj", roman: "♭VI" },
-        { degree: 4, quality: "dom7", roman: "V7" },
-      ],
-    },
-  ],
-
-  hopeful: [
-    {
-      name: "Rising Hope (IV–V–vi–I)",
-      mode: "major",
-      steps: [
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 4, quality: "maj", roman: "V" },
-        { degree: 5, quality: "min", roman: "vi" },
-        { degree: 0, quality: "maj", roman: "I" },
-      ],
-    },
-    {
-      name: "Dawn (Imaj7–iiim7–IVmaj7–V)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 2, quality: "min7", roman: "iiim7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-        { degree: 4, quality: "maj", roman: "V" },
-      ],
-    },
-    {
-      name: "Mixolydian Sunrise (I–♭VII–IV–I)",
-      mode: "mixolydian",
-      steps: [
-        { degree: 0, quality: "maj", roman: "I" },
-        { degree: 6, quality: "maj", roman: "♭VII" },
-        { degree: 3, quality: "maj", roman: "IV" },
-        { degree: 0, quality: "maj", roman: "I" },
-      ],
-    },
-    {
-      name: "Gentle Resolve (IVadd9–V–Imaj7–vim7)",
-      mode: "major",
-      steps: [
-        { degree: 3, quality: "add9", roman: "IVadd9" },
-        { degree: 4, quality: "maj", roman: "V" },
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-      ],
-    },
-  ],
-
-  contemplative: [
-    {
-      name: "Dorian Meditation (im7–IVmaj7–im7–vm7)",
-      mode: "dorian",
-      steps: [
-        { degree: 0, quality: "min7", roman: "im7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-        { degree: 0, quality: "min7", roman: "im7" },
-        { degree: 4, quality: "min7", roman: "vm7" },
-      ],
-    },
-    {
-      name: "Inner Dialogue (Imaj7–iiim7–vim7–IVmaj7)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 2, quality: "min7", roman: "iiim7" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-      ],
-    },
-    {
-      name: "Philosophical (iim7–V7–Imaj7–vim7)",
-      mode: "major",
-      steps: [
-        { degree: 1, quality: "min7", roman: "iim7" },
-        { degree: 4, quality: "dom7", roman: "V7" },
-        { degree: 0, quality: "maj7", roman: "Imaj7" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-      ],
-    },
-    {
-      name: "Still Water (Isus2–vim7–IVmaj7–Isus2)",
-      mode: "major",
-      steps: [
-        { degree: 0, quality: "sus2", roman: "Isus2" },
-        { degree: 5, quality: "min7", roman: "vim7" },
-        { degree: 3, quality: "maj7", roman: "IVmaj7" },
-        { degree: 0, quality: "sus2", roman: "Isus2" },
-      ],
-    },
-  ],
-};
-
-// ── Main generation function ─────────────────────────────────────────
+// ── Main public function ─────────────────────────────────────────────
 
 export function generateProgression(
   moodId: string,
   key: NoteName
 ): ChordProgression {
-  const templates = MOOD_PROGRESSIONS[moodId];
-  if (!templates) {
-    throw new Error(`Unknown mood: ${moodId}`);
-  }
-
-  const template = templates[Math.floor(Math.random() * templates.length)];
-  const chords = template.steps.map((step) =>
-    getScaleDegreeChord(key, template.mode, step.degree, step.quality, step.roman)
-  );
+  const profile = MOOD_PROFILES[moodId];
+  if (!profile) throw new Error(`Unknown mood: ${moodId}`);
 
   const mood = MOODS.find((m) => m.id === moodId);
+
+  // 1. Pick mode
+  const mode = weightedRandom(profile.modes, profile.modeWeights);
+  const degrees = MODE_DEGREES[mode];
+
+  // 2. Pick phrase length
+  const totalBeats = weightedRandom(profile.phraseLengths, profile.phraseWeights);
+
+  // 3. Generate rhythm
+  const durations = generateRhythm(totalBeats, profile.rhythmStyle);
+  const chordCount = durations.length;
+
+  // 4. Generate cadence (last 2 chords)
+  const cadence = getCadence(mode, profile.preferredCadence);
+
+  // 5. Generate chords using harmonic function transitions
+  const chordSpecs: Array<{
+    degree: number;
+    quality: ChordQuality;
+    roman: string;
+    fn: HarmonicFunction;
+    duration: number;
+  }> = [];
+
+  // Start on tonic (degree 0)
+  let currentDegree = 0;
+
+  for (let i = 0; i < chordCount; i++) {
+    const isCadenceStart = i === chordCount - 2;
+    const isCadenceEnd = i === chordCount - 1;
+
+    let degree: number;
+    let useMode = mode;
+    let degreeInfo: ScaleDegreeInfo;
+
+    if (isCadenceEnd && cadence.length >= 2) {
+      // Final chord of cadence
+      degree = cadence[1].degree;
+      degreeInfo = { ...degrees[degree] };
+      if (cadence[1].forceQuality) degreeInfo.quality = cadence[1].forceQuality;
+      if (cadence[1].forcedRoman) degreeInfo.roman = cadence[1].forcedRoman;
+    } else if (isCadenceStart && cadence.length >= 2) {
+      // Penultimate chord of cadence
+      degree = cadence[0].degree;
+      degreeInfo = { ...degrees[degree] };
+      if (cadence[0].forceQuality) degreeInfo.quality = cadence[0].forceQuality;
+      if (cadence[0].forcedRoman) degreeInfo.roman = cadence[0].forcedRoman;
+    } else if (i === 0) {
+      // Start on tonic
+      degree = 0;
+      degreeInfo = degrees[0];
+    } else {
+      // Normal transition
+      degree = getNextDegree(currentDegree, degrees[currentDegree].function, degrees, profile);
+
+      // Maybe borrow from parallel mode
+      const borrowed = maybeBorrowChord(key, mode, degree, profile);
+      if (borrowed) {
+        useMode = borrowed.borrowedMode;
+        degreeInfo = MODE_DEGREES[useMode][borrowed.degree];
+      } else {
+        degreeInfo = degrees[degree];
+      }
+    }
+
+    // Maybe extend the chord quality
+    const { quality, romanSuffix } = maybeExtend(
+      degreeInfo.quality,
+      profile.extensionChance,
+      profile.susChance,
+      degreeInfo.function,
+    );
+
+    const roman = romanSuffix
+      ? degreeInfo.roman.replace(/[°+]$/, "") + romanSuffix
+      : degreeInfo.roman;
+
+    chordSpecs.push({
+      degree,
+      quality,
+      roman,
+      fn: degreeInfo.function,
+      duration: durations[i],
+    });
+
+    currentDegree = degree;
+  }
+
+  // 6. Build actual Chord objects
+  const chords = chordSpecs.map((spec) =>
+    buildChordFromDegree(
+      key,
+      mode,
+      spec.degree,
+      spec.quality,
+      spec.roman,
+      spec.fn,
+      spec.duration
+    )
+  );
 
   return {
     chords,
     key,
-    mode: template.mode,
+    mode,
     mood: mood?.name ?? moodId,
-    name: template.name,
+    totalBeats,
   };
 }
 
-// ── MIDI helpers for piano roll ──────────────────────────────────────
+// ── MIDI helpers ─────────────────────────────────────────────────────
 
 export function midiToNoteName(midi: number): string {
   const note = ALL_NOTES[midi % 12];
   const octave = Math.floor(midi / 12) - 1;
   return `${note}${octave}`;
-}
-
-export function midiToFrequency(midi: number): number {
-  return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
 export const KEY_OPTIONS: NoteName[] = ALL_NOTES;

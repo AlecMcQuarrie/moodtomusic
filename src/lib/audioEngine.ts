@@ -34,6 +34,13 @@ export async function startAudioContext() {
   await Tone.start();
 }
 
+interface ChordEvent {
+  time: string;
+  chordIndex: number;
+  notes: string[];
+  durationBeats: number;
+}
+
 export function playProgression(
   progression: ChordProgression,
   bpm: number,
@@ -44,25 +51,30 @@ export function playProgression(
   const s = ensureSynth();
   Tone.getTransport().bpm.value = bpm;
 
-  const beatsPerChord = 4;
-  const events: Array<{ time: string; chordIndex: number; notes: string[] }> = [];
+  const events: ChordEvent[] = [];
+  let beatOffset = 0;
 
   progression.chords.forEach((chord, i) => {
     const notes = chord.midiNotes.map(midiToNoteName);
     events.push({
-      time: `0:${i * beatsPerChord}:0`,
+      time: `0:${beatOffset}:0`,
       chordIndex: i,
       notes,
+      durationBeats: chord.durationBeats,
     });
+    beatOffset += chord.durationBeats;
   });
 
-  const totalBars = Math.ceil(
-    (progression.chords.length * beatsPerChord) / 4
-  );
+  const totalBars = progression.totalBeats / 4;
 
-  currentPart = new Tone.Part<{ time: string; chordIndex: number; notes: string[] }>(
+  currentPart = new Tone.Part<ChordEvent>(
     (time, event) => {
-      s.triggerAttackRelease(event.notes, `0:${beatsPerChord}:0`, time, 0.7);
+      s.triggerAttackRelease(
+        event.notes,
+        `0:${event.durationBeats}:0`,
+        time,
+        0.7
+      );
       Tone.getDraw().schedule(() => {
         callbacks.onChordChange(event.chordIndex);
       }, time);
